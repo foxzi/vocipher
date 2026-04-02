@@ -151,7 +151,7 @@ function updateChannelUsers(channelID, users) {
         if (existing) {
             // Update in place
             const avatar = existing.querySelector('.sb-avatar');
-            if (avatar) avatar.className = `sb-avatar w-6 h-6 rounded-full ${u.Speaking ? 'bg-vc-accent speaking-ring' : 'bg-vc-channel'} flex items-center justify-center text-xs font-bold text-white`;
+            if (avatar) avatar.className = `sb-avatar w-6 h-6 rounded-full ${u.Speaking ? 'bg-vc-green ring-2 ring-vc-green/40' : 'bg-vc-channel'} flex items-center justify-center text-xs font-bold text-white`;
             const name = existing.querySelector('.sb-name');
             if (name) name.className = `sb-name ${u.Muted ? 'text-vc-muted line-through' : 'text-vc-text'}`;
             const muteIcon = existing.querySelector('.sb-mute');
@@ -164,7 +164,7 @@ function updateChannelUsers(channelID, users) {
             div.className = 'flex items-center gap-2 px-2 py-1 rounded text-sm fade-in';
             div.innerHTML = `
                 <div class="relative">
-                    <div class="sb-avatar w-6 h-6 rounded-full ${u.Speaking ? 'bg-vc-accent speaking-ring' : 'bg-vc-channel'} flex items-center justify-center text-xs font-bold text-white">
+                    <div class="sb-avatar w-6 h-6 rounded-full ${u.Speaking ? 'bg-vc-green ring-2 ring-vc-green/40' : 'bg-vc-channel'} flex items-center justify-center text-xs font-bold text-white">
                         ${escapeHTML(u.Username.charAt(0).toUpperCase())}
                     </div>
                 </div>
@@ -251,8 +251,9 @@ function joinChannel(channelID, channelName) {
                         <input type="range" min="1" max="60" value="${vadThreshold}" oninput="setVadThreshold(this.value)"
                             class="w-full h-1.5 rounded-full appearance-none bg-vc-border cursor-pointer accent-vc-accent">
                     </div>
-                    <div class="w-16 h-2 bg-vc-bg rounded-full overflow-hidden border border-vc-border">
+                    <div class="relative w-16 h-2 bg-vc-bg rounded-full overflow-hidden border border-vc-border">
                         <div id="vad-meter" class="h-full rounded-full bg-vc-muted/50 transition-all duration-75" style="width:0%"></div>
+                        <div id="vad-threshold-marker" class="absolute top-0 h-full w-0.5 bg-vc-accent/80" style="left:${Math.min(100, (vadThreshold / 80) * 100)}%"></div>
                     </div>
                 </div>
                 <button onclick="togglePTT()" id="ptt-btn"
@@ -320,7 +321,7 @@ function updateMainContent(channelID, users) {
 
             const avatar = existing.querySelector('.avatar-circle');
             if (avatar) {
-                avatar.className = `avatar-circle w-16 h-16 rounded-full ${u.Speaking ? 'bg-vc-accent speaking-ring' : 'bg-vc-channel'} flex items-center justify-center text-2xl font-bold text-white transition-all`;
+                avatar.className = `avatar-circle w-16 h-16 rounded-full ${u.Speaking ? 'bg-vc-green ring-4 ring-vc-green/30' : 'bg-vc-channel'} flex items-center justify-center text-2xl font-bold text-white transition-all`;
             }
 
             const muteIndicator = existing.querySelector('.mute-indicator');
@@ -340,13 +341,16 @@ function updateMainContent(channelID, users) {
             card.className = `flex flex-col items-center gap-3 p-4 rounded-xl bg-vc-sidebar/50 border ${u.Speaking ? 'border-vc-green shadow-lg shadow-vc-green/20' : 'border-vc-border'} fade-in transition-all duration-200`;
             card.innerHTML = `
                 <div class="relative">
-                    <div class="avatar-circle w-16 h-16 rounded-full ${u.Speaking ? 'bg-vc-accent speaking-ring' : 'bg-vc-channel'} flex items-center justify-center text-2xl font-bold text-white transition-all">
+                    <div class="avatar-circle w-16 h-16 rounded-full ${u.Speaking ? 'bg-vc-green ring-4 ring-vc-green/30' : 'bg-vc-channel'} flex items-center justify-center text-2xl font-bold text-white transition-all">
                         ${escapeHTML(u.Username.charAt(0).toUpperCase())}
                     </div>
                     <div class="mute-indicator absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-vc-red flex items-center justify-center" style="display:${u.Muted ? '' : 'none'}"><svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/></svg></div>
                 </div>
                 <span class="user-name text-sm font-medium ${u.Muted ? 'text-vc-muted' : 'text-vc-text'}">${escapeHTML(u.Username)}</span>
-                <div class="speaking-indicator flex gap-1" style="display:${u.Speaking ? '' : 'none'}"><div class="w-1.5 h-3 bg-vc-accent rounded-full animate-pulse"></div><div class="w-1.5 h-5 bg-vc-accent rounded-full animate-pulse" style="animation-delay:0.15s"></div><div class="w-1.5 h-3 bg-vc-accent rounded-full animate-pulse" style="animation-delay:0.3s"></div></div>
+                <div class="speaking-indicator flex items-center gap-1.5" style="display:${u.Speaking ? '' : 'none'}">
+                    <div class="flex gap-0.5"><div class="w-1.5 h-3 bg-vc-green rounded-full animate-pulse"></div><div class="w-1.5 h-5 bg-vc-green rounded-full animate-pulse" style="animation-delay:0.15s"></div><div class="w-1.5 h-3 bg-vc-green rounded-full animate-pulse" style="animation-delay:0.3s"></div></div>
+                    <span class="text-xs text-vc-green font-medium">Speaking</span>
+                </div>
                 <div class="speaking-spacer h-5" style="display:${u.Speaking ? 'none' : ''}"></div>
             `;
             grid.appendChild(card);
@@ -965,6 +969,7 @@ function setupVAD(stream) {
             if (!isSpeaking) {
                 isSpeaking = true;
                 sendWS({ type: 'speaking', payload: { speaking: true } });
+                updateSelfSpeakingUI(true);
             }
         } else {
             silenceCount++;
@@ -973,16 +978,35 @@ function setupVAD(stream) {
                 if (isSpeaking) {
                     isSpeaking = false;
                     sendWS({ type: 'speaking', payload: { speaking: false } });
+                    updateSelfSpeakingUI(false);
                 }
             }
         }
     }, 50);
 }
 
+function updateSelfSpeakingUI(speaking) {
+    const avatar = document.getElementById('self-avatar');
+    const indicator = document.getElementById('self-speaking-indicator');
+    if (avatar) {
+        if (speaking) {
+            avatar.classList.add('ring-2', 'ring-vc-green', 'ring-offset-1', 'ring-offset-vc-bg');
+        } else {
+            avatar.classList.remove('ring-2', 'ring-vc-green', 'ring-offset-1', 'ring-offset-vc-bg');
+        }
+    }
+    if (indicator) {
+        indicator.classList.toggle('hidden', !speaking);
+        indicator.classList.toggle('flex', speaking);
+    }
+}
+
 function setVadThreshold(value) {
     vadThreshold = parseInt(value);
     const label = document.getElementById('vad-threshold-label');
     if (label) label.textContent = vadThreshold;
+    const marker = document.getElementById('vad-threshold-marker');
+    if (marker) marker.style.left = Math.min(100, (vadThreshold / 80) * 100) + '%';
 }
 
 // ─── Push-to-Talk Keyboard ────────────────────────────────────

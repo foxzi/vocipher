@@ -44,11 +44,18 @@
         <div class="p-3 bg-vc-bg/50 border-t border-vc-border">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
-                    <div class="w-8 h-8 rounded-full bg-vc-accent flex items-center justify-center text-white text-sm font-bold">
+                    <div id="self-avatar" class="w-8 h-8 rounded-full bg-vc-accent flex items-center justify-center text-white text-sm font-bold transition-all duration-200">
                         {{slice .User.Username 0 1}}
                     </div>
                     <div>
-                        <div class="text-sm font-medium">{{.User.Username}}</div>
+                        <div class="text-sm font-medium flex items-center gap-1.5">
+                            {{.User.Username}}
+                            <div id="self-speaking-indicator" class="hidden flex gap-0.5 items-center">
+                                <div class="w-1 h-2 bg-vc-green rounded-full animate-pulse"></div>
+                                <div class="w-1 h-3 bg-vc-green rounded-full animate-pulse" style="animation-delay:0.1s"></div>
+                                <div class="w-1 h-2 bg-vc-green rounded-full animate-pulse" style="animation-delay:0.2s"></div>
+                            </div>
+                        </div>
                         <div class="text-xs text-vc-green" id="connection-status">Connected</div>
                     </div>
                 </div>
