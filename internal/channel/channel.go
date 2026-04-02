@@ -21,9 +21,9 @@ type ConnectedUser struct {
 
 // In-memory state for who's in which channel
 var (
-	mu             sync.RWMutex
-	channelUsers   = make(map[int64]map[int64]*ConnectedUser) // channelID -> userID -> user
-	userToChannel  = make(map[int64]int64)                    // userID -> channelID
+	mu            sync.RWMutex
+	channelUsers  = make(map[int64]map[int64]*ConnectedUser) // channelID -> userID -> user
+	userToChannel = make(map[int64]int64)                    // userID -> channelID
 )
 
 func Create(name string, createdBy int64) (*Channel, error) {
@@ -51,6 +51,16 @@ func List() ([]Channel, error) {
 		channels = append(channels, ch)
 	}
 	return channels, nil
+}
+
+func GetByID(id int64) (*Channel, error) {
+	var ch Channel
+	err := database.DB.QueryRow("SELECT id, name, created_by FROM channels WHERE id = ?", id).
+		Scan(&ch.ID, &ch.Name, &ch.CreatedBy)
+	if err != nil {
+		return nil, err
+	}
+	return &ch, nil
 }
 
 func Delete(id int64) error {
