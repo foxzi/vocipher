@@ -12,8 +12,19 @@ import (
 	rtc "github.com/kidandcat/vocipher/internal/webrtc"
 )
 
+// Maximum WebSocket message size (512 KB — enough for screen preview base64)
+const maxMessageSize = 512 * 1024
+
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin: func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true // non-browser clients
+		}
+		// Allow same-origin requests
+		host := r.Host
+		return origin == "http://"+host || origin == "https://"+host
+	},
 }
 
 type Message struct {
@@ -46,6 +57,11 @@ var (
 func (h *Hub) Register(client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	// Close previous connection for the same user (#8)
+	if old, ok := h.clients[client.UserID]; ok {
+		close(old.Send)
+		old.Conn.Close()
+	}
 	h.clients[client.UserID] = client
 }
 
@@ -147,6 +163,8 @@ func (c *Client) readPump() {
 		broadcastPresence()
 	}()
 
+	c.Conn.SetReadLimit(maxMessageSize)
+
 	for {
 		_, raw, err := c.Conn.ReadMessage()
 		if err != nil {
@@ -240,7 +258,7 @@ func handleMessage(c *Client, msg Message) {
 			log.Printf("signaling: webrtc offer failed for user %d: %v", c.UserID, err)
 		}
 		// Clear preview if the renegotiation removed the video track
-		if !sdpHasVideoSending(p.SDP) {
+		if !rtc.SDPHasVideoSending(p.SDP) {
 			clearPreviewIfSharer(chID, c.UserID)
 		}
 
@@ -319,9 +337,10 @@ func handleMessage(c *Client, msg Message) {
 }
 
 func cleanupWebRTC(channelID int64, userID int64) {
-	sfu := rtc.GetOrCreateSFU(channelID, func(uid int64, data []byte) {
-		GlobalHub.SendTo(uid, data)
-	})
+	sfu := rtc.GetSFU(channelID)
+	if sfu == nil {
+		return
+	}
 	sfu.RemovePeer(userID)
 	rtc.RemoveSFU(channelID)
 }
@@ -343,6 +362,13 @@ func broadcastPresence() {
 		"channels": states,
 	})
 	GlobalHub.Broadcast(data)
+}
+
+// ClearChannelPreview removes the stored screen preview for a channel (e.g. when channel is deleted).
+func ClearChannelPreview(channelID int64) {
+	previewMu.Lock()
+	delete(channelPreviews, channelID)
+	previewMu.Unlock()
 }
 
 // clearPreviewIfSharer clears the screen preview for a channel if the given user was the sharer.
@@ -369,48 +395,4 @@ func clearPreviewIfSharer(channelID int64, userID int64) {
 		"type": "screen_preview_clear",
 	})
 	GlobalHub.BroadcastToChannel(channelID, clearMsg)
-}
-
-// sdpHasVideoSending checks if an SDP offer contains a video m-line that is sending.
-func sdpHasVideoSending(sdp string) bool {
-	// Look for m=video line that is not inactive/recvonly
-	inVideo := false
-	for _, line := range splitLines(sdp) {
-		if len(line) > 7 && line[:8] == "m=video " {
-			inVideo = true
-			continue
-		}
-		if len(line) > 2 && line[:2] == "m=" {
-			inVideo = false
-			continue
-		}
-		if inVideo && len(line) > 2 && line[:2] == "a=" {
-			if line == "a=sendrecv" || line == "a=sendonly" {
-				return true
-			}
-			if line == "a=inactive" || line == "a=recvonly" {
-				return false
-			}
-		}
-	}
-	return false
-}
-
-func splitLines(s string) []string {
-	var lines []string
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			line := s[start:i]
-			if len(line) > 0 && line[len(line)-1] == '\r' {
-				line = line[:len(line)-1]
-			}
-			lines = append(lines, line)
-			start = i + 1
-		}
-	}
-	if start < len(s) {
-		lines = append(lines, s[start:])
-	}
-	return lines
 }
