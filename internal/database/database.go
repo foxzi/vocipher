@@ -29,6 +29,8 @@ func migrate() {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			username TEXT UNIQUE NOT NULL,
 			password_hash TEXT NOT NULL,
+			is_admin INTEGER NOT NULL DEFAULT 0,
+			is_active INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS channels (
@@ -40,7 +42,8 @@ func migrate() {
 		`CREATE TABLE IF NOT EXISTS sessions (
 			token TEXT PRIMARY KEY,
 			user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			expires_at DATETIME NOT NULL DEFAULT (datetime('now', '+30 days'))
 		)`,
 	}
 
@@ -48,5 +51,14 @@ func migrate() {
 		if _, err := DB.Exec(q); err != nil {
 			log.Fatal("migration failed:", err)
 		}
+	}
+
+	// Migrations for existing databases
+	migrations := []string{
+		`ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 0`,
+	}
+	for _, q := range migrations {
+		DB.Exec(q) // ignore errors if columns already exist
 	}
 }

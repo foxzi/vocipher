@@ -1,0 +1,135 @@
+{{template "layout.html" .}}
+{{define "content"}}
+<div class="min-h-screen p-6">
+    <div class="max-w-4xl mx-auto">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-8">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-vc-accent/20 flex items-center justify-center">
+                    <svg class="w-5 h-5 text-vc-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold">Admin Panel</h1>
+                    <p class="text-sm text-vc-muted">Manage users and activation</p>
+                </div>
+            </div>
+            <a href="/" class="px-4 py-2 bg-vc-channel hover:bg-vc-hover text-vc-text text-sm font-medium rounded-lg transition border border-vc-border">
+                Back to App
+            </a>
+        </div>
+
+        {{if .Flash}}
+        <div class="mb-4 p-3 bg-vc-green/20 border border-vc-green/30 rounded-lg text-sm text-vc-green fade-in">
+            {{.Flash}}
+        </div>
+        {{end}}
+
+        <!-- Users Table -->
+        <div class="bg-vc-sidebar rounded-xl border border-vc-border overflow-hidden">
+            <div class="px-6 py-4 border-b border-vc-border">
+                <h2 class="text-lg font-semibold">Users ({{len .Users}})</h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="text-left text-xs text-vc-muted uppercase tracking-wider border-b border-vc-border">
+                            <th class="px-6 py-3">User</th>
+                            <th class="px-6 py-3">Status</th>
+                            <th class="px-6 py-3">Role</th>
+                            <th class="px-6 py-3">Created</th>
+                            <th class="px-6 py-3 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .Users}}
+                        <tr class="border-b border-vc-border/50 hover:bg-vc-hover/30 transition">
+                            <td class="px-6 py-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-full {{if .IsActive}}bg-vc-accent{{else}}bg-vc-muted{{end}} flex items-center justify-center text-white text-sm font-bold">
+                                        {{slice .Username 0 1}}
+                                    </div>
+                                    <span class="font-medium">{{.Username}}</span>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                {{if .IsActive}}
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-vc-green/20 text-vc-green">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-vc-green"></span>
+                                    Active
+                                </span>
+                                {{else}}
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-vc-yellow/20 text-vc-yellow">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-vc-yellow"></span>
+                                    Pending
+                                </span>
+                                {{end}}
+                            </td>
+                            <td class="px-6 py-4">
+                                {{if .IsAdmin}}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-vc-accent/20 text-vc-accent">Admin</span>
+                                {{else}}
+                                <span class="text-sm text-vc-muted">User</span>
+                                {{end}}
+                            </td>
+                            <td class="px-6 py-4 text-sm text-vc-muted">
+                                {{.CreatedAt.Format "2006-01-02 15:04"}}
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center justify-end gap-2">
+                                    {{if .IsActive}}
+                                    <form method="POST" action="/admin/users/deactivate" class="inline">
+                                        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                                        <input type="hidden" name="user_id" value="{{.ID}}">
+                                        <button type="submit" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-vc-yellow/20 text-vc-yellow hover:bg-vc-yellow/30 transition" title="Deactivate">
+                                            Deactivate
+                                        </button>
+                                    </form>
+                                    {{else}}
+                                    <form method="POST" action="/admin/users/activate" class="inline">
+                                        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                                        <input type="hidden" name="user_id" value="{{.ID}}">
+                                        <button type="submit" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-vc-green/20 text-vc-green hover:bg-vc-green/30 transition" title="Activate">
+                                            Activate
+                                        </button>
+                                    </form>
+                                    {{end}}
+
+                                    {{if .IsAdmin}}
+                                    <form method="POST" action="/admin/users/revoke-admin" class="inline">
+                                        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                                        <input type="hidden" name="user_id" value="{{.ID}}">
+                                        <button type="submit" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-vc-channel text-vc-muted hover:bg-vc-hover transition" title="Revoke admin">
+                                            Revoke Admin
+                                        </button>
+                                    </form>
+                                    {{else}}
+                                    <form method="POST" action="/admin/users/make-admin" class="inline">
+                                        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                                        <input type="hidden" name="user_id" value="{{.ID}}">
+                                        <button type="submit" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-vc-accent/20 text-vc-accent hover:bg-vc-accent/30 transition" title="Make admin">
+                                            Make Admin
+                                        </button>
+                                    </form>
+                                    {{end}}
+
+                                    <form method="POST" action="/admin/users/delete" class="inline" onsubmit="return confirm('Delete user {{.Username}}?')">
+                                        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                                        <input type="hidden" name="user_id" value="{{.ID}}">
+                                        <button type="submit" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-vc-red/20 text-vc-red hover:bg-vc-red/30 transition" title="Delete user">
+                                            Delete
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}

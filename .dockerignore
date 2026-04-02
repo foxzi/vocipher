@@ -1,0 +1,8 @@
+.git
+*.db
+*.db-wal
+*.db-shm
+vocipher
+server
+docs/
+CLAUDE.md

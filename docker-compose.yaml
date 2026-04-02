@@ -1,0 +1,17 @@
+services:
+  vocipher:
+    build: .
+    ports:
+      - "8090:8090"
+      - "3478:3478/udp"    # TURN server
+    environment:
+      - VOCIPHER_DB_PATH=/app/data/vocipher.db
+      - VOCIPHER_ADDR=:8090
+      # Set to your server's public IP to enable built-in TURN
+      # - VOCIPHER_TURN_IP=203.0.113.1
+    volumes:
+      - vocipher-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  vocipher-data:

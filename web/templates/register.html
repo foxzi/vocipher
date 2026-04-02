@@ -19,6 +19,7 @@
         {{end}}
 
         <form method="POST" action="/register" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
             <div>
                 <label class="block text-sm font-medium text-vc-muted mb-1.5">Username</label>
                 <input type="text" name="username" required autofocus minlength="2" maxlength="20"
@@ -27,7 +28,7 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-vc-muted mb-1.5">Password</label>
-                <input type="password" name="password" required minlength="4"
+                <input type="password" name="password" required minlength="8"
                     class="w-full px-4 py-2.5 bg-vc-bg border border-vc-border rounded-lg text-vc-text placeholder-vc-muted focus:outline-none focus:border-vc-accent focus:ring-1 focus:ring-vc-accent transition"
                     placeholder="Choose a password">
             </div>

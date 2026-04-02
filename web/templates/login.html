@@ -20,6 +20,7 @@
         {{end}}
 
         <form method="POST" action="/login" class="space-y-4">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
             <div>
                 <label class="block text-sm font-medium text-vc-muted mb-1.5">Username</label>
                 <input type="text" name="username" required autofocus

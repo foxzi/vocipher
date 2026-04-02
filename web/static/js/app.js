@@ -3,6 +3,13 @@ let currentChannelID = null;
 let isMuted = false;
 let reconnectAttempts = 0;
 
+// XSS-safe HTML escaping
+function escapeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 // WebRTC state
 let peerConnection = null;
 let localStream = null;
@@ -72,7 +79,10 @@ function handleWSMessage(msg) {
             handleRemoteICECandidate(msg.payload);
             break;
         case 'screen_preview':
-            latestScreenPreview = msg.payload.image;
+            // Only accept data: URIs to prevent injection via url()
+            if (msg.payload.image && msg.payload.image.startsWith('data:image/')) {
+                latestScreenPreview = msg.payload.image;
+            }
             screenShareUsername = msg.username || null;
             // If there's already a play overlay visible, update its background
             if (document.getElementById('screen-share-play-overlay')) {
@@ -153,10 +163,10 @@ function updateChannelUsers(channelID, users) {
             div.innerHTML = `
                 <div class="relative">
                     <div class="sb-avatar w-6 h-6 rounded-full ${u.Speaking ? 'bg-vc-accent speaking-ring' : 'bg-vc-channel'} flex items-center justify-center text-xs font-bold text-white">
-                        ${u.Username.charAt(0).toUpperCase()}
+                        ${escapeHTML(u.Username.charAt(0).toUpperCase())}
                     </div>
                 </div>
-                <span class="sb-name ${u.Muted ? 'text-vc-muted line-through' : 'text-vc-text'}">${u.Username}</span>
+                <span class="sb-name ${u.Muted ? 'text-vc-muted line-through' : 'text-vc-text'}">${escapeHTML(u.Username)}</span>
                 <svg class="sb-mute w-3 h-3 text-vc-red ml-auto" fill="currentColor" viewBox="0 0 24 24" style="display:${u.Muted ? '' : 'none'}"><path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/></svg>
                 <div class="sb-speaking ml-auto flex gap-0.5" style="display:${u.Speaking ? '' : 'none'}"><div class="w-1 h-3 bg-vc-accent rounded-full animate-pulse"></div><div class="w-1 h-4 bg-vc-accent rounded-full animate-pulse" style="animation-delay:0.1s"></div><div class="w-1 h-2 bg-vc-accent rounded-full animate-pulse" style="animation-delay:0.2s"></div></div>
             `;
@@ -199,7 +209,7 @@ function joinChannel(channelID, channelName) {
                 <svg class="w-6 h-6 text-vc-accent" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/>
                 </svg>
-                <h2 class="text-xl font-bold">${channelName}</h2>
+                <h2 class="text-xl font-bold">${escapeHTML(channelName)}</h2>
                 <div id="rtc-status" class="flex items-center gap-1.5 ml-4">
                     <div class="w-2 h-2 rounded-full bg-vc-yellow animate-pulse"></div>
                     <span class="text-xs text-vc-yellow">Connecting...</span>
@@ -329,11 +339,11 @@ function updateMainContent(channelID, users) {
             card.innerHTML = `
                 <div class="relative">
                     <div class="avatar-circle w-16 h-16 rounded-full ${u.Speaking ? 'bg-vc-accent speaking-ring' : 'bg-vc-channel'} flex items-center justify-center text-2xl font-bold text-white transition-all">
-                        ${u.Username.charAt(0).toUpperCase()}
+                        ${escapeHTML(u.Username.charAt(0).toUpperCase())}
                     </div>
                     <div class="mute-indicator absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-vc-red flex items-center justify-center" style="display:${u.Muted ? '' : 'none'}"><svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/></svg></div>
                 </div>
-                <span class="user-name text-sm font-medium ${u.Muted ? 'text-vc-muted' : 'text-vc-text'}">${u.Username}</span>
+                <span class="user-name text-sm font-medium ${u.Muted ? 'text-vc-muted' : 'text-vc-text'}">${escapeHTML(u.Username)}</span>
                 <div class="speaking-indicator flex gap-1" style="display:${u.Speaking ? '' : 'none'}"><div class="w-1.5 h-3 bg-vc-accent rounded-full animate-pulse"></div><div class="w-1.5 h-5 bg-vc-accent rounded-full animate-pulse" style="animation-delay:0.15s"></div><div class="w-1.5 h-3 bg-vc-accent rounded-full animate-pulse" style="animation-delay:0.3s"></div></div>
                 <div class="speaking-spacer h-5" style="display:${u.Speaking ? 'none' : ''}"></div>
             `;
@@ -432,13 +442,12 @@ async function startWebRTC() {
         // Setup VAD
         setupVAD(localStream);
 
-        // Create peer connection
-        peerConnection = new RTCPeerConnection({
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-            ],
-        });
+        // Create peer connection with server-provided ICE config (includes TURN if configured)
+        const iceServers = window.VOCIPHER_ICE_SERVERS || [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+        ];
+        peerConnection = new RTCPeerConnection({ iceServers });
 
         // Add audio track
         localStream.getTracks().forEach(track => {
@@ -697,7 +706,7 @@ function showRemoteVideo(stream, track) {
                         <path d="M8 5v14l11-7z"/>
                     </svg>
                 </div>
-                <span class="text-vc-text text-sm font-medium">${screenShareUsername ? screenShareUsername + ' is sharing their screen' : 'Someone is sharing their screen'}</span>
+                <span class="text-vc-text text-sm font-medium">${screenShareUsername ? escapeHTML(screenShareUsername) + ' is sharing their screen' : 'Someone is sharing their screen'}</span>
                 <span class="text-vc-muted text-xs">Click to watch</span>
             </div>
         `;
@@ -709,7 +718,7 @@ function showRemoteVideo(stream, track) {
                     <path d="M8 5v14l11-7z"/>
                 </svg>
             </div>
-            <span class="text-vc-text text-sm font-medium">${screenShareUsername ? screenShareUsername + ' is sharing their screen' : 'Someone is sharing their screen'}</span>
+            <span class="text-vc-text text-sm font-medium">${screenShareUsername ? escapeHTML(screenShareUsername) + ' is sharing their screen' : 'Someone is sharing their screen'}</span>
             <span class="text-vc-muted text-xs">Click to watch</span>
         `;
     }
@@ -778,7 +787,7 @@ function showScreenPreviewPlaceholder() {
                     <path d="M8 5v14l11-7z"/>
                 </svg>
             </div>
-            <span class="text-vc-text text-sm font-medium">${screenShareUsername ? screenShareUsername + ' is sharing their screen' : 'Someone is sharing their screen'}</span>
+            <span class="text-vc-text text-sm font-medium">${screenShareUsername ? escapeHTML(screenShareUsername) + ' is sharing their screen' : 'Someone is sharing their screen'}</span>
             <span class="text-vc-muted text-xs">Click to watch</span>
         </div>
     `;
