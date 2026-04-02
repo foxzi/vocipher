@@ -19,6 +19,12 @@
         </div>
         {{end}}
 
+        {{if .Info}}
+        <div class="mb-4 p-3 bg-vc-accent/20 border border-vc-accent/30 rounded-lg text-sm text-vc-accent fade-in">
+            {{.Info}}
+        </div>
+        {{end}}
+
         <form method="POST" action="/login" class="space-y-4">
             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
             <div>

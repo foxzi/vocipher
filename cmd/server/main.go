@@ -295,7 +295,7 @@ func userFromContext(r *http.Request) *auth.User {
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 	// #10 — method check
 	if r.Method == http.MethodGet {
-		if auth.UserFromRequest(r) != nil {
+		if user := auth.UserFromRequest(r); user != nil && user.IsActive {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
@@ -354,7 +354,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 func handleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		if auth.UserFromRequest(r) != nil {
+		if user := auth.UserFromRequest(r); user != nil && user.IsActive {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
 		}
@@ -393,6 +393,16 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		csrfToken := setCSRFCookie(w, r)
 		templates["register.html"].ExecuteTemplate(w, "layout.html", map[string]any{
 			"Error":     "Username already taken",
+			"CSRFToken": csrfToken,
+		})
+		return
+	}
+
+	// If user is not active (not the first user), show pending message instead of creating session
+	if !user.IsActive {
+		csrfToken := setCSRFCookie(w, r)
+		templates["login.html"].ExecuteTemplate(w, "layout.html", map[string]any{
+			"Info":      "Account created. Please wait for an administrator to activate your account.",
 			"CSRFToken": csrfToken,
 		})
 		return
