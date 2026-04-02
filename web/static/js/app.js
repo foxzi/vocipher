@@ -463,7 +463,14 @@ async function startWebRTC() {
                 audio.play().catch(() => {});
             } else if (event.track.kind === 'video') {
                 const stream = event.streams[0] || new MediaStream([event.track]);
-                showRemoteVideo(stream, event.track);
+                // If video is already playing, just update the stream
+                const existingVideo = document.getElementById('screen-share-video');
+                if (existingVideo) {
+                    existingVideo.srcObject = stream;
+                    existingVideo.play().catch(() => {});
+                } else {
+                    showRemoteVideo(stream, event.track);
+                }
             }
         };
 
@@ -536,26 +543,23 @@ function handleWebRTCAnswer(payload) {
 }
 
 async function handleWebRTCOffer(payload) {
-    // Server-initiated renegotiation (new peer joined with audio)
+    // Server-initiated renegotiation (new peer joined or tracks changed)
     if (!peerConnection) return;
 
-    await peerConnection.setRemoteDescription(
-        new RTCSessionDescription({ type: 'offer', sdp: payload.sdp })
-    );
+    try {
+        await peerConnection.setRemoteDescription(
+            new RTCSessionDescription({ type: 'offer', sdp: payload.sdp })
+        );
 
-    const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
 
-    sendWS({
-        type: 'webrtc_answer',
-        payload: { sdp: answer.sdp },
-    });
-
-    // Check if remote video tracks are still present; if not, remove video container
-    const receivers = peerConnection.getReceivers();
-    const hasVideo = receivers.some(r => r.track && r.track.kind === 'video' && r.track.readyState === 'live');
-    if (!hasVideo) {
-        removeRemoteVideo();
+        sendWS({
+            type: 'webrtc_answer',
+            payload: { sdp: answer.sdp },
+        });
+    } catch (err) {
+        console.error('Failed to handle WebRTC offer:', err);
     }
 }
 
@@ -688,6 +692,7 @@ function showRemoteVideo(stream, track) {
     video.id = 'screen-share-video';
     video.srcObject = stream;
     video.playsInline = true;
+    video.autoplay = true;
     video.muted = true;
     video.className = 'w-full h-full object-contain hidden';
     video.style.maxHeight = '70vh';
@@ -726,16 +731,21 @@ function showRemoteVideo(stream, track) {
         video.classList.remove('hidden');
         playOverlay.remove();
         videoContainer.className = 'w-full bg-black rounded-xl overflow-hidden mb-4 relative';
-        video.play().catch(() => {});
+        // Re-assign stream in case tracks changed during renegotiation
+        if (video.srcObject !== stream) {
+            video.srcObject = stream;
+        }
+        video.play().catch(err => {
+            console.error('Screen share video play failed:', err);
+        });
     };
 
     videoContainer.appendChild(video);
     videoContainer.appendChild(playOverlay);
     container.parentElement.insertBefore(videoContainer, container);
 
-    // Clean up when track ends or is muted (SFU removed it)
+    // Clean up when track ends
     track.onended = () => removeRemoteVideo();
-    track.onmute = () => removeRemoteVideo();
 }
 
 function removeRemoteVideo() {
@@ -954,10 +964,6 @@ function setupVAD(stream) {
 
         if (voiceDetected) {
             silenceCount = 0;
-            // Enable audio track when voice detected
-            if (localStream) {
-                localStream.getAudioTracks().forEach(t => { t.enabled = true; });
-            }
             if (!isSpeaking) {
                 isSpeaking = true;
                 sendWS({ type: 'speaking', payload: { speaking: true } });
@@ -965,10 +971,6 @@ function setupVAD(stream) {
         } else {
             silenceCount++;
             if (silenceCount >= SILENCE_DELAY) {
-                // Disable audio track when silent
-                if (localStream && !pushToTalk) {
-                    localStream.getAudioTracks().forEach(t => { t.enabled = false; });
-                }
                 if (isSpeaking) {
                     isSpeaking = false;
                     sendWS({ type: 'speaking', payload: { speaking: false } });
