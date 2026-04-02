@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
@@ -20,6 +21,8 @@ import (
 	"github.com/kidandcat/vocipher/internal/channel"
 	"github.com/kidandcat/vocipher/internal/database"
 	"github.com/kidandcat/vocipher/internal/signaling"
+	embeddedTurn "github.com/kidandcat/vocipher/internal/turn"
+	rtc "github.com/kidandcat/vocipher/internal/webrtc"
 	"golang.org/x/time/rate"
 )
 
@@ -31,12 +34,21 @@ type ctxKey string
 
 const userCtxKey ctxKey = "user"
 
+var funcMap = template.FuncMap{
+	"toJSON": func(v any) template.JS {
+		b, _ := json.Marshal(v)
+		return template.JS(b)
+	},
+}
+
 func loadTemplates() map[string]*template.Template {
 	layoutFile := filepath.Join("web", "templates", "layout.html")
 	pages := []string{"login.html", "register.html", "app.html"}
 	t := make(map[string]*template.Template, len(pages))
 	for _, page := range pages {
-		t[page] = template.Must(template.ParseFiles(layoutFile, filepath.Join("web", "templates", page)))
+		t[page] = template.Must(
+			template.New("").Funcs(funcMap).ParseFiles(layoutFile, filepath.Join("web", "templates", page)),
+		)
 	}
 	return t
 }
@@ -152,6 +164,21 @@ func main() {
 		dbPath = "vocipher.db"
 	}
 	database.Init(dbPath)
+
+	// Start embedded TURN server if public IP is configured
+	turnPublicIP := os.Getenv("VOCIPHER_TURN_IP")
+	if turnPublicIP != "" {
+		cfg := embeddedTurn.DefaultConfig(turnPublicIP)
+		turnServer, err := embeddedTurn.Start(cfg)
+		if err != nil {
+			log.Fatal("failed to start TURN server:", err)
+		}
+		defer turnServer.Close()
+
+		username, password, uri := turnServer.Credentials()
+		rtc.SetTURNCredentials(uri, username, password)
+		log.Printf("TURN credentials: uri=%s user=%s", uri, username)
+	}
 
 	// Periodic session cleanup (#5)
 	go func() {
@@ -381,11 +408,26 @@ func handleApp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	csrfToken := setCSRFCookie(w, r)
+
+	// Build ICE servers config for client
+	iceServers := []map[string]any{
+		{"urls": "stun:stun.l.google.com:19302"},
+		{"urls": "stun:stun1.l.google.com:19302"},
+	}
+	if creds := rtc.GetTURNCredentials(); creds != nil {
+		iceServers = append(iceServers, map[string]any{
+			"urls":       creds.URI,
+			"username":   creds.Username,
+			"credential": creds.Password,
+		})
+	}
+
 	data := map[string]any{
-		"User":      user,
-		"Channels":  channels,
-		"CacheBust": cacheBust,
-		"CSRFToken": csrfToken,
+		"User":       user,
+		"Channels":   channels,
+		"CacheBust":  cacheBust,
+		"CSRFToken":  csrfToken,
+		"ICEServers": iceServers,
 	}
 	templates["app.html"].ExecuteTemplate(w, "layout.html", data)
 }
