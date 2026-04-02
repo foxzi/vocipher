@@ -147,7 +147,11 @@ func sessionCookie(token string, maxAge int) *http.Cookie {
 // --- Main ---
 
 func main() {
-	database.Init("vocipher.db")
+	dbPath := os.Getenv("VOCIPHER_DB_PATH")
+	if dbPath == "" {
+		dbPath = "vocipher.db"
+	}
+	database.Init(dbPath)
 
 	// Periodic session cleanup (#5)
 	go func() {
@@ -180,7 +184,10 @@ func main() {
 	// Wrap with middleware: security headers -> rate limiting -> mux
 	handler := securityHeaders(rateLimitMiddleware(mux))
 
-	addr := ":8090"
+	addr := os.Getenv("VOCIPHER_ADDR")
+	if addr == "" {
+		addr = ":8090"
+	}
 	server := &http.Server{
 		Addr:         addr,
 		Handler:      handler,
