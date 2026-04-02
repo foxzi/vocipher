@@ -20,6 +20,8 @@ let pttActive = false;
 // VAD state
 let audioContext = null;
 let analyser = null;
+let gainNode = null;
+let processedStream = null; // audio stream routed through GainNode for VAD control
 let vadInterval = null;
 let isSpeaking = false;
 let vadThreshold = 25;
@@ -383,11 +385,9 @@ function toggleMute() {
     isMuted = !isMuted;
     sendWS({ type: 'mute', payload: { muted: isMuted } });
 
-    // Mute/unmute the actual audio track
-    if (localStream) {
-        localStream.getAudioTracks().forEach(t => {
-            t.enabled = !isMuted;
-        });
+    // Mute/unmute via GainNode
+    if (gainNode) {
+        gainNode.gain.value = isMuted ? 0.0 : 1.0;
     }
 
     updateMuteUI();
@@ -407,16 +407,8 @@ function togglePTT() {
     }
     if (hint) hint.textContent = pushToTalk ? 'Hold Space to talk' : '';
 
-    if (pushToTalk) {
-        // In PTT mode, mute by default
-        if (localStream) {
-            localStream.getAudioTracks().forEach(t => { t.enabled = false; });
-        }
-    } else {
-        // Open mic mode - respect mute state
-        if (localStream) {
-            localStream.getAudioTracks().forEach(t => { t.enabled = !isMuted; });
-        }
+    if (gainNode) {
+        gainNode.gain.value = pushToTalk ? 0.0 : (isMuted ? 0.0 : 1.0);
     }
 }
 
@@ -434,12 +426,17 @@ async function startWebRTC() {
             video: false,
         });
 
-        // Apply mute state
-        localStream.getAudioTracks().forEach(t => {
-            t.enabled = pushToTalk ? false : !isMuted;
-        });
+        // Route audio through Web Audio API GainNode for VAD-based muting
+        audioContext = new AudioContext();
+        const source = audioContext.createMediaStreamSource(localStream);
+        gainNode = audioContext.createGain();
+        gainNode.gain.value = (pushToTalk || isMuted) ? 0.0 : 1.0;
+        const dest = audioContext.createMediaStreamDestination();
+        source.connect(gainNode);
+        gainNode.connect(dest);
+        processedStream = dest.stream;
 
-        // Setup VAD
+        // Setup VAD (reads from raw localStream for level detection)
         setupVAD(localStream);
 
         // Create peer connection with server-provided ICE config (includes TURN if configured)
@@ -449,9 +446,9 @@ async function startWebRTC() {
         ];
         peerConnection = new RTCPeerConnection({ iceServers });
 
-        // Add audio track
-        localStream.getTracks().forEach(track => {
-            peerConnection.addTrack(track, localStream);
+        // Add processed audio track (goes through GainNode)
+        processedStream.getTracks().forEach(track => {
+            peerConnection.addTrack(track, processedStream);
         });
 
         // Handle remote tracks (audio from other peers)
@@ -930,7 +927,7 @@ function updateRTCStatusText(state, text) {
 // ─── Voice Activity Detection ─────────────────────────────────
 
 function setupVAD(stream) {
-    audioContext = new AudioContext();
+    // audioContext is already created in startWebRTC
     analyser = audioContext.createAnalyser();
     analyser.fftSize = 512;
     analyser.smoothingTimeConstant = 0.3;
@@ -964,6 +961,7 @@ function setupVAD(stream) {
 
         if (voiceDetected) {
             silenceCount = 0;
+            if (gainNode) gainNode.gain.value = 1.0;
             if (!isSpeaking) {
                 isSpeaking = true;
                 sendWS({ type: 'speaking', payload: { speaking: true } });
@@ -971,6 +969,7 @@ function setupVAD(stream) {
         } else {
             silenceCount++;
             if (silenceCount >= SILENCE_DELAY) {
+                if (gainNode && !pushToTalk) gainNode.gain.value = 0.0;
                 if (isSpeaking) {
                     isSpeaking = false;
                     sendWS({ type: 'speaking', payload: { speaking: false } });
@@ -993,7 +992,7 @@ document.addEventListener('keydown', (e) => {
     if (e.code === 'Space' && !e.repeat && !isInputFocused()) {
         e.preventDefault();
         pttActive = true;
-        localStream.getAudioTracks().forEach(t => { t.enabled = true; });
+        if (gainNode) gainNode.gain.value = 1.0;
     }
 });
 
@@ -1002,7 +1001,7 @@ document.addEventListener('keyup', (e) => {
     if (e.code === 'Space' && !isInputFocused()) {
         e.preventDefault();
         pttActive = false;
-        localStream.getAudioTracks().forEach(t => { t.enabled = false; });
+        if (gainNode) gainNode.gain.value = 0.0;
     }
 });
 
