@@ -58,8 +58,7 @@ func (h *Hub) Register(client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	// Close previous connection for the same user (#8)
-	if old, ok := h.clients[client.UserID]; ok {
-		close(old.Send)
+	if old, ok := h.clients[client.UserID]; ok && old != client {
 		old.Conn.Close()
 	}
 	h.clients[client.UserID] = client
@@ -69,8 +68,9 @@ func (h *Hub) Unregister(client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if _, ok := h.clients[client.UserID]; ok {
-		close(client.Send)
+	// Only remove if this is still the current client for this user
+	// (a newer connection may have replaced this one via Register)
+	if current, ok := h.clients[client.UserID]; ok && current == client {
 		delete(h.clients, client.UserID)
 	}
 }
