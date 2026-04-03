@@ -50,6 +50,20 @@ function connectWS() {
     ws.onopen = () => {
         reconnectAttempts = 0;
         setConnectionStatus('connected');
+
+        // Rejoin channel after reconnect
+        if (currentChannelID) {
+            const chID = currentChannelID;
+            const wasCameraOn = isCameraOn;
+            cleanupWebRTC();
+            currentChannelID = chID;
+            sendWS({ type: 'join_channel', payload: { channel_id: chID } });
+            startWebRTC().then(() => {
+                if (wasCameraOn) {
+                    startCamera();
+                }
+            });
+        }
     };
 
     ws.onclose = () => {
