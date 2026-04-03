@@ -52,13 +52,8 @@ function connectWS() {
         reconnectAttempts = 0;
         setConnectionStatus('connected');
 
-        // Auto-join from URL on first connect
-        if (!currentChannelID && window.VOCIPHER_AUTO_JOIN) {
-            autoJoinFromURL();
-        }
-
-        // Rejoin channel after reconnect
         if (currentChannelID) {
+            // Rejoin channel after reconnect
             const chID = currentChannelID;
             const wasCameraOn = isCameraOn;
             cleanupWebRTC();
@@ -67,6 +62,9 @@ function connectWS() {
             startWebRTC().then(() => {
                 if (wasCameraOn) startCamera();
             });
+        } else if (window.VOCIPHER_AUTO_JOIN) {
+            // Auto-join from URL on first connect
+            autoJoinFromURL();
         }
     };
 
