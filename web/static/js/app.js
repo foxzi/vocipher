@@ -40,6 +40,7 @@ let cameraStream = null;
 let cameraSender = null;
 let isCameraOn = false;
 let remoteCameras = {}; // userID -> { stream, username }
+let lastServerOfferTime = 0;
 
 // ─── WebSocket ────────────────────────────────────────────────
 
@@ -559,6 +560,8 @@ async function startWebRTC() {
             // Debounce to avoid racing with server-initiated renegotiation
             if (negoTimeout) clearTimeout(negoTimeout);
             negoTimeout = setTimeout(async () => {
+                // Skip if recently handled a server-initiated offer (avoid conflict)
+                if (Date.now() - lastServerOfferTime < 3000) return;
                 try {
                     if (!peerConnection || peerConnection.signalingState !== 'stable') return;
                     const offer = await peerConnection.createOffer();
@@ -568,7 +571,7 @@ async function startWebRTC() {
                 } catch (err) {
                     console.error('Negotiation failed:', err);
                 }
-            }, 200);
+            }, 500);
         };
 
         // Connection state
@@ -632,6 +635,7 @@ function handleWebRTCAnswer(payload) {
 async function handleWebRTCOffer(payload) {
     // Server-initiated renegotiation (new peer joined or tracks changed)
     if (!peerConnection) return;
+    lastServerOfferTime = Date.now();
 
     try {
         await peerConnection.setRemoteDescription(
