@@ -977,7 +977,7 @@ function handleRemoteCameraTrack(stream, track, mid) {
     const grid = document.getElementById('camera-grid');
     if (!grid) return;
 
-    // Use mid as stable element ID — each m-line in SDP has unique mid
+    console.log('Camera track:', { mid, trackId: track.id, streamId: stream.id });
     const camId = 'remote-cam-' + (mid || track.id);
     const existing = document.getElementById(camId);
     if (existing) {
