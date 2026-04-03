@@ -199,6 +199,7 @@ func main() {
 			turnCfg.Port = cfg.TURN.Port
 		}
 		turnCfg.TLSPort = cfg.TURN.TLSPort
+		turnCfg.TLSHost = cfg.TURN.TLSHost
 		turnCfg.CertFile = cfg.TURN.CertFile
 		turnCfg.KeyFile = cfg.TURN.KeyFile
 

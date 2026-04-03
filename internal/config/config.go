@@ -40,6 +40,7 @@ type TURNConfig struct {
 	IP       string `yaml:"ip"`
 	Port     int    `yaml:"port"`      // UDP TURN port (default 3478)
 	TLSPort  int    `yaml:"tls_port"`  // TLS TURNS port (default 5349, 0 = disabled)
+	TLSHost  string `yaml:"tls_host"`  // Domain name for TURNS URI (must match TLS cert)
 	CertFile string `yaml:"cert_file"` // TLS certificate file for TURNS
 	KeyFile  string `yaml:"key_file"`  // TLS private key file for TURNS
 }

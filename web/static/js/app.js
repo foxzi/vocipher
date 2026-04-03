@@ -513,7 +513,18 @@ async function startWebRTC() {
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
         ];
-        peerConnection = new RTCPeerConnection({ iceServers });
+        // Force relay on mobile if TURNS is available (carrier NAT drops UDP)
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        const hasTurns = iceServers.some(s => {
+            const urls = Array.isArray(s.urls) ? s.urls : [s.urls || ''];
+            return urls.some(u => u.startsWith('turns:'));
+        });
+        const rtcConfig = { iceServers };
+        if (isMobile && hasTurns) {
+            rtcConfig.iceTransportPolicy = 'relay';
+            console.log('Mobile detected, forcing TURNS relay');
+        }
+        peerConnection = new RTCPeerConnection(rtcConfig);
 
         // Add processed audio track (goes through GainNode)
         processedStream.getTracks().forEach(track => {

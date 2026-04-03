@@ -16,6 +16,7 @@ type Config struct {
 	PublicIP string // External IP that clients use to reach the TURN server
 	Port     int    // UDP port for TURN (default 3478)
 	TLSPort  int    // TCP/TLS port for TURNS (default 5349, 0 = disabled)
+	TLSHost  string // Domain name for TURNS URI (must match TLS cert SAN)
 	CertFile string // TLS certificate file path
 	KeyFile  string // TLS private key file path
 	Realm    string
@@ -142,7 +143,11 @@ func (s *Server) Credentials() (username, password string, uris []string) {
 		fmt.Sprintf("turn:%s:%d?transport=udp", s.cfg.PublicIP, s.cfg.Port),
 	}
 	if s.tlsOn {
-		uris = append(uris, fmt.Sprintf("turns:%s:%d?transport=tcp", s.cfg.PublicIP, s.cfg.TLSPort))
+		turnsHost := s.cfg.TLSHost
+		if turnsHost == "" {
+			turnsHost = s.cfg.PublicIP
+		}
+		uris = append(uris, fmt.Sprintf("turns:%s:%d?transport=tcp", turnsHost, s.cfg.TLSPort))
 	}
 	return
 }
