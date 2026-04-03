@@ -93,8 +93,9 @@ func getAPI() *webrtc.API {
 
 		// Always configure SettingEngine for keepalive and optional NAT/ports
 		s := webrtc.SettingEngine{}
-		// Aggressive ICE keepalive for mobile networks with short NAT binding
-		s.SetICETimeouts(5*time.Second, 25*time.Second, 2*time.Second)
+		// ICE keepalive every 2s to maintain NAT bindings on mobile networks
+		// Longer disconnect/failed timeouts to tolerate mobile signal drops
+		s.SetICETimeouts(15*time.Second, 60*time.Second, 2*time.Second)
 		if natIP != "" {
 			s.SetNAT1To1IPs([]string{natIP}, webrtc.ICECandidateTypeHost)
 		}
