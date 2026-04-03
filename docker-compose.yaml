@@ -5,6 +5,7 @@ services:
       - "8090"
     ports:
       - "3478:3478/udp"
+      - "5349:5349/tcp"
       - "40000-40200:40000-40200/udp"
     volumes:
       - vocipher-data:/app/data

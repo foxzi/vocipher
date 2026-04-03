@@ -36,9 +36,12 @@ type WebRTCConfig struct {
 }
 
 type TURNConfig struct {
-	Enabled bool   `yaml:"enabled"`
-	IP      string `yaml:"ip"`
-	Port    int    `yaml:"port"`
+	Enabled  bool   `yaml:"enabled"`
+	IP       string `yaml:"ip"`
+	Port     int    `yaml:"port"`      // UDP TURN port (default 3478)
+	TLSPort  int    `yaml:"tls_port"`  // TLS TURNS port (default 5349, 0 = disabled)
+	CertFile string `yaml:"cert_file"` // TLS certificate file for TURNS
+	KeyFile  string `yaml:"key_file"`  // TLS private key file for TURNS
 }
 
 type AuthConfig struct {
@@ -71,7 +74,8 @@ func Default() *Config {
 			MaxMessageKB: 512,
 		},
 		TURN: TURNConfig{
-			Port: 3478,
+			Port:    3478,
+			TLSPort: 5349,
 		},
 		Auth: AuthConfig{
 			SessionDays:    30,

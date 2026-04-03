@@ -192,21 +192,25 @@ func main() {
 		signaling.SetMaxMessageSize(int64(cfg.WebRTC.MaxMessageKB) * 1024)
 	}
 
-	// Start embedded TURN server if configured
+	// Start embedded TURN/TURNS server if configured
 	if cfg.TURN.Enabled && cfg.TURN.IP != "" {
 		turnCfg := embeddedTurn.DefaultConfig(cfg.TURN.IP)
 		if cfg.TURN.Port > 0 {
 			turnCfg.Port = cfg.TURN.Port
 		}
+		turnCfg.TLSPort = cfg.TURN.TLSPort
+		turnCfg.CertFile = cfg.TURN.CertFile
+		turnCfg.KeyFile = cfg.TURN.KeyFile
+
 		turnServer, err := embeddedTurn.Start(turnCfg)
 		if err != nil {
 			log.Fatal("failed to start TURN server:", err)
 		}
 		defer turnServer.Close()
 
-		username, password, uri := turnServer.Credentials()
-		rtc.SetTURNCredentials(uri, username, password)
-		log.Printf("TURN credentials: uri=%s user=%s", uri, username)
+		username, password, uris := turnServer.Credentials()
+		rtc.SetTURNCredentials(uris, username, password)
+		log.Printf("TURN credentials: uris=%v user=%s", uris, username)
 	}
 
 	// Periodic session cleanup
@@ -481,7 +485,7 @@ func handleApp(w http.ResponseWriter, r *http.Request) {
 	}
 	if creds := rtc.GetTURNCredentials(); creds != nil {
 		iceServers = append(iceServers, map[string]any{
-			"urls":       creds.URI,
+			"urls":       creds.URIs,
 			"username":   creds.Username,
 			"credential": creds.Password,
 		})

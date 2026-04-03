@@ -2,6 +2,7 @@ package turn
 
 import (
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -14,17 +15,20 @@ import (
 type Config struct {
 	PublicIP string // External IP that clients use to reach the TURN server
 	Port     int    // UDP port for TURN (default 3478)
+	TLSPort  int    // TCP/TLS port for TURNS (default 5349, 0 = disabled)
+	CertFile string // TLS certificate file path
+	KeyFile  string // TLS private key file path
 	Realm    string
-	secret   string // shared secret for auth
+	secret   string
 }
 
 // Server wraps a pion TURN server.
 type Server struct {
 	cfg    Config
 	server *pionTurn.Server
+	tlsOn  bool
 }
 
-// generateSecret creates a random shared secret.
 func generateSecret() string {
 	b := make([]byte, 32)
 	rand.Read(b)
@@ -32,17 +36,17 @@ func generateSecret() string {
 }
 
 // DefaultConfig returns a Config with sensible defaults.
-// publicIP must be provided for TURN to work.
 func DefaultConfig(publicIP string) Config {
 	return Config{
 		PublicIP: publicIP,
 		Port:     3478,
+		TLSPort:  5349,
 		Realm:    "vocipher",
 		secret:   generateSecret(),
 	}
 }
 
-// Start creates and starts the embedded TURN server.
+// Start creates and starts the embedded TURN/TURNS server.
 func Start(cfg Config) (*Server, error) {
 	if cfg.PublicIP == "" {
 		return nil, fmt.Errorf("turn: public IP is required")
@@ -57,47 +61,90 @@ func Start(cfg Config) (*Server, error) {
 		cfg.secret = generateSecret()
 	}
 
-	addr := fmt.Sprintf("0.0.0.0:%d", cfg.Port)
-	udpListener, err := net.ListenPacket("udp4", addr)
-	if err != nil {
-		return nil, fmt.Errorf("turn: failed to listen on %s: %w", addr, err)
-	}
-
-	// Single static user for all WebRTC clients
 	username := "vocipher"
 	key := pionTurn.GenerateAuthKey(username, cfg.Realm, cfg.secret)
 
-	srv, err := pionTurn.NewServer(pionTurn.ServerConfig{
-		Realm: cfg.Realm,
-		AuthHandler: func(u, realm string, srcAddr net.Addr) ([]byte, bool) {
-			if u == username {
-				return key, true
-			}
-			return nil, false
+	authHandler := func(u, realm string, srcAddr net.Addr) ([]byte, bool) {
+		if u == username {
+			return key, true
+		}
+		return nil, false
+	}
+
+	relayGen := &pionTurn.RelayAddressGeneratorStatic{
+		RelayAddress: net.ParseIP(cfg.PublicIP),
+		Address:      "0.0.0.0",
+	}
+
+	serverCfg := pionTurn.ServerConfig{
+		Realm:       cfg.Realm,
+		AuthHandler: authHandler,
+	}
+
+	// UDP listener (standard TURN)
+	udpAddr := fmt.Sprintf("0.0.0.0:%d", cfg.Port)
+	udpListener, err := net.ListenPacket("udp4", udpAddr)
+	if err != nil {
+		return nil, fmt.Errorf("turn: failed to listen UDP on %s: %w", udpAddr, err)
+	}
+	serverCfg.PacketConnConfigs = []pionTurn.PacketConnConfig{
+		{
+			PacketConn:            udpListener,
+			RelayAddressGenerator: relayGen,
 		},
-		PacketConnConfigs: []pionTurn.PacketConnConfig{
+	}
+	log.Printf("TURN server listening on UDP %s (public IP: %s)", udpAddr, cfg.PublicIP)
+
+	// TLS listener (TURNS) — optional
+	tlsOn := false
+	if cfg.TLSPort > 0 && cfg.CertFile != "" && cfg.KeyFile != "" {
+		cert, err := tls.LoadX509KeyPair(cfg.CertFile, cfg.KeyFile)
+		if err != nil {
+			udpListener.Close()
+			return nil, fmt.Errorf("turn: failed to load TLS certificate: %w", err)
+		}
+
+		tlsAddr := fmt.Sprintf("0.0.0.0:%d", cfg.TLSPort)
+		tlsListener, err := tls.Listen("tcp4", tlsAddr, &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			MinVersion:   tls.VersionTLS12,
+		})
+		if err != nil {
+			udpListener.Close()
+			return nil, fmt.Errorf("turn: failed to listen TLS on %s: %w", tlsAddr, err)
+		}
+
+		serverCfg.ListenerConfigs = []pionTurn.ListenerConfig{
 			{
-				PacketConn: udpListener,
-				RelayAddressGenerator: &pionTurn.RelayAddressGeneratorStatic{
-					RelayAddress: net.ParseIP(cfg.PublicIP),
-					Address:      "0.0.0.0",
-				},
+				Listener:              tlsListener,
+				RelayAddressGenerator: relayGen,
 			},
-		},
-	})
+		}
+		tlsOn = true
+		log.Printf("TURNS server listening on TLS %s", tlsAddr)
+	}
+
+	srv, err := pionTurn.NewServer(serverCfg)
 	if err != nil {
 		udpListener.Close()
 		return nil, fmt.Errorf("turn: failed to create server: %w", err)
 	}
 
-	log.Printf("TURN server started on %s (public IP: %s)", addr, cfg.PublicIP)
-
-	return &Server{cfg: cfg, server: srv}, nil
+	return &Server{cfg: cfg, server: srv, tlsOn: tlsOn}, nil
 }
 
-// Credentials returns the TURN username, password and URI for ICE config.
-func (s *Server) Credentials() (username, password, uri string) {
-	return "vocipher", s.cfg.secret, fmt.Sprintf("turn:%s:%d", s.cfg.PublicIP, s.cfg.Port)
+// Credentials returns TURN username, password, and URIs for ICE config.
+// Returns both turn: (UDP) and turns: (TLS) URIs if TLS is enabled.
+func (s *Server) Credentials() (username, password string, uris []string) {
+	username = "vocipher"
+	password = s.cfg.secret
+	uris = []string{
+		fmt.Sprintf("turn:%s:%d?transport=udp", s.cfg.PublicIP, s.cfg.Port),
+	}
+	if s.tlsOn {
+		uris = append(uris, fmt.Sprintf("turns:%s:%d?transport=tcp", s.cfg.PublicIP, s.cfg.TLSPort))
+	}
+	return
 }
 
 // Close stops the TURN server.

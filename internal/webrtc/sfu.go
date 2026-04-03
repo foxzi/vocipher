@@ -108,15 +108,15 @@ func getAPI() *webrtc.API {
 }
 
 type TURNCredentials struct {
-	URI      string
+	URIs     []string
 	Username string
 	Password string
 }
 
 var turnCreds *TURNCredentials
 
-func SetTURNCredentials(uri, username, password string) {
-	turnCreds = &TURNCredentials{URI: uri, Username: username, Password: password}
+func SetTURNCredentials(uris []string, username, password string) {
+	turnCreds = &TURNCredentials{URIs: uris, Username: username, Password: password}
 }
 
 func GetTURNCredentials() *TURNCredentials {
@@ -130,7 +130,7 @@ func newPeerConnectionConfig() webrtc.Configuration {
 	}
 	if turnCreds != nil {
 		iceServers = append(iceServers, webrtc.ICEServer{
-			URLs:       []string{turnCreds.URI},
+			URLs:       turnCreds.URIs,
 			Username:   turnCreds.Username,
 			Credential: turnCreds.Password,
 		})

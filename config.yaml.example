@@ -21,6 +21,9 @@ turn:
   enabled: false            # Enable built-in TURN server
   ip: ""                    # Public IP for TURN (required if enabled)
   port: 3478                # TURN UDP port
+  tls_port: 5349            # TURNS TLS port (0 = disabled)
+  cert_file: ""             # TLS certificate (e.g. /etc/letsencrypt/live/example.com/fullchain.pem)
+  key_file: ""              # TLS private key (e.g. /etc/letsencrypt/live/example.com/privkey.pem)
 
 auth:
   session_days: 30          # Session expiry in days
