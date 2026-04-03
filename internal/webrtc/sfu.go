@@ -400,9 +400,9 @@ func (s *SFU) RemovePeer(userID int64) {
 	}
 	s.mu.Unlock()
 
-	// Immediate renegotiation for track removal (no debounce)
+	// Renegotiate with peers that had tracks removed
 	for _, op := range needsRenego {
-		s.doRenegotiate(op)
+		s.renegotiate(op)
 	}
 
 	if peer.PC.ConnectionState() != webrtc.PeerConnectionStateClosed {
@@ -622,7 +622,7 @@ func (s *SFU) renegotiate(peer *Peer) {
 	peer.mu.Unlock()
 
 	go func() {
-		time.Sleep(300 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 
 		peer.mu.Lock()
 		peer.negoScheduled = false
