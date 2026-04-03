@@ -79,6 +79,9 @@ All real-time communication uses a WebSocket connection to `/ws`. Messages are J
 | `webrtc_offer` | `{sdp: string}` | SDP offer for WebRTC |
 | `webrtc_answer` | `{sdp: string}` | SDP answer (during renegotiation) |
 | `ice_candidate` | `{candidate: object}` | ICE candidate exchange |
+| `camera_on` / `camera_off` | -- | Toggle camera track expectation |
+| `chat_message` | `{text: string}` | Send text chat message |
+| `chat_reaction` | `{message_id, emoji}` | Add emoji reaction to a message |
 | `screen_preview` | `{image: string}` | Base64 JPEG thumbnail of screen share |
 
 **Server to Client:**
@@ -90,6 +93,10 @@ All real-time communication uses a WebSocket connection to `/ws`. Messages are J
 | `webrtc_offer` | `{payload: {sdp}}` | Server-initiated renegotiation |
 | `webrtc_answer` | `{payload: {sdp}}` | SDP answer from SFU |
 | `ice_candidate` | `{payload: {candidate}}` | ICE candidate from SFU |
+| `chat_message` | `{id, user_id, username, text, timestamp}` | Chat message broadcast |
+| `chat_history` | `{messages[]}` | Last 50 messages on channel join |
+| `chat_reaction` | `{message_id, user_id, username, emoji}` | Reaction broadcast |
+| `error` | `{error, text}` | Error (e.g. `access_denied`) |
 | `screen_preview` | `{user_id, username, payload: {image}}` | Screen share thumbnail |
 | `screen_preview_clear` | -- | Screen share ended |
 
@@ -111,8 +118,35 @@ channels (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     name       TEXT UNIQUE NOT NULL,
     created_by INTEGER REFERENCES users(id),
+    is_private INTEGER NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )
+
+channel_members (
+    channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (channel_id, user_id)
+)
+
+channel_invites (
+    token      TEXT PRIMARY KEY,
+    channel_id INTEGER NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    created_by INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    max_uses   INTEGER NOT NULL DEFAULT 0,
+    uses       INTEGER NOT NULL DEFAULT 0
+)
+
+chat_messages (
+    id         TEXT PRIMARY KEY,
+    channel_id INTEGER NOT NULL,
+    user_id    INTEGER NOT NULL,
+    username   TEXT NOT NULL,
+    text       TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+)
+-- INDEX idx_chat_messages_channel ON chat_messages(channel_id, created_at)
 
 sessions (
     token      TEXT PRIMARY KEY,
@@ -121,6 +155,55 @@ sessions (
     expires_at DATETIME NOT NULL DEFAULT (datetime('now', '+30 days'))
 )
 ```
+
+### Text Chat
+
+Each voice channel has an integrated text chat panel. Messages are relayed via WebSocket and persisted in SQLite (`chat_messages` table).
+
+- On channel join, server sends `chat_history` with the last 50 messages
+- New messages are broadcast to all channel participants in real-time
+- Emoji reactions (ephemeral, not persisted) can be added to messages
+- Old messages are auto-deleted based on `chat_retention_days` config (default 30 days, runs every 6 hours)
+- Message length is limited to 2000 characters
+
+### Camera (Webcam)
+
+The SFU supports camera video tracks separate from screen share. Each user can toggle their camera on/off.
+
+- Camera tracks use `streamID = "camera-{userID}"` for stable deduplication during renegotiation
+- Camera grid is displayed above user avatars in the channel view
+- Client handles `onnegotiationneeded` with debouncing (500ms) to coalesce multiple track additions
+
+### Private Channels
+
+Channels can be created as private (locked). All users see private channels in the sidebar (with a lock icon), but only authorized users can join.
+
+**Access rules:**
+- Public channels: any authenticated user can join
+- Private channels: only members, the creator, or server admins can join
+- Attempting to join without access returns a `{type: "error", error: "access_denied"}` message
+
+**Member management:**
+- Creator and server admins can add/remove members
+- Members are stored in `channel_members` table
+- Creator is automatically added as a member on channel creation
+
+**Invite links:**
+- Creator/admins can generate invite links (`/invite/{token}`)
+- Links expire after 7 days
+- Accepting an invite adds the user as a channel member
+- If not logged in, user is redirected to login and then back to the invite
+
+**API endpoints:**
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/channels/members?id={id}` | GET | List members (JSON) |
+| `/channels/members/add` | POST | Add member by username |
+| `/channels/members/remove` | POST | Remove member by user_id |
+| `/channels/invite` | POST | Generate invite link |
+| `/invite/{token}` | GET | Accept invite link |
+| `/api/users` | GET | List active users (for member picker) |
 
 ### TURN Server
 
@@ -208,9 +291,45 @@ SQLite с WAL-режимом и включёнными foreign keys. Три та
 - Адаптивная мобильная вёрстка -- сворачиваемый сайдбар, компактная панель управления
 - Индикаторы говорящих -- зелёное кольцо + анимированные полоски
 
+### Текстовый чат
+
+Каждый голосовой канал имеет встроенную панель текстового чата. Сообщения пересылаются через WebSocket и сохраняются в SQLite.
+
+- При входе в канал сервер отправляет последние 50 сообщений
+- Новые сообщения транслируются всем участникам канала в реальном времени
+- Emoji-реакции на сообщения (эфемерные, не сохраняются)
+- Автоматическое удаление старых сообщений по настройке `chat_retention_days` (по умолчанию 30 дней)
+- Максимальная длина сообщения -- 2000 символов
+
+### Камера (вебкамера)
+
+SFU поддерживает отдельные видеотреки камеры и демонстрации экрана. Каждый пользователь может включать/выключать камеру.
+
+- Треки камеры используют `streamID = "camera-{userID}"` для стабильной дедупликации при ренеготиации
+- Сетка камер отображается над аватарами пользователей
+
+### Приватные каналы
+
+Каналы можно создавать как приватные (закрытые). Все пользователи видят приватные каналы в сайдбаре (с иконкой замка), но войти могут только авторизованные.
+
+**Правила доступа:**
+- Публичные каналы -- любой аутентифицированный пользователь
+- Приватные каналы -- только участники, создатель или администраторы сервера
+
+**Управление участниками:**
+- Создатель и администраторы могут добавлять/удалять участников
+- Выбор из списка зарегистрированных пользователей (dropdown)
+- Создатель автоматически становится участником
+
+**Invite-ссылки:**
+- Создатель/админ может сгенерировать ссылку-приглашение (`/invite/{token}`)
+- Ссылка действует 7 дней
+- При переходе по ссылке пользователь добавляется как участник канала
+- Если не залогинен -- редирект на логин и обратно на invite
+
 ### Админ-панель
 
 - `/admin` -- таблица пользователей с управлением
-- Активация/деактивация, назначение/снятие админа, удаление
+- Активация/деактивация, назначение/снятие админа, удаление, сброс пароля
 - Первый зарегистрированный пользователь автоматически становится админом
 - Новые пользователи создаются в статусе Pending

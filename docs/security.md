@@ -18,7 +18,7 @@ All state-changing POST requests require a CSRF token. The token is:
 - Embedded in HTML forms as a hidden `<input>` field
 - Validated server-side by comparing the cookie value with the form field value
 
-Protected endpoints: `/login`, `/register`, `/channels`, `/channels/delete`, `/admin/users/*`.
+Protected endpoints: `/login`, `/register`, `/channels`, `/channels/delete`, `/channels/members/*`, `/channels/invite`, `/admin/users/*`.
 
 ### WebSocket Security
 
@@ -39,7 +39,7 @@ All responses include:
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: DENY`
 - `Referrer-Policy: strict-origin-when-cross-origin`
-- `Permissions-Policy: microphone=(self), camera=()`
+- `Permissions-Policy: microphone=(self), camera=(self)`
 
 ### Authorization
 
@@ -48,7 +48,11 @@ All responses include:
 - **Admin panel:** Only users with `is_admin=1` can access `/admin`
 - **Channel deletion:** Only the creator or an admin can delete a channel
 - **Channel creation:** Any active authenticated user can create channels
-- **Voice channels:** Any active authenticated user can join any channel
+- **Public voice channels:** Any active authenticated user can join
+- **Private channels:** Only members, the creator, or server admins can join
+- **Private channel management:** Only the creator or admins can add/remove members and generate invite links
+- **Invite links:** 7-day expiry, token-based, auto-add member on accept
+- **Chat messages:** Limited to 2000 characters, auto-cleaned by retention policy
 - **Self-protection:** Admins cannot modify their own account (prevents self-deactivation)
 
 ### XSS Prevention
@@ -100,7 +104,7 @@ All database queries use parameterized statements (`?` placeholders). No string 
 
 Все POST-запросы, изменяющие состояние, требуют CSRF-токен. Токен хранится в отдельной куке `csrf_token` и дублируется в скрытом поле формы. Сервер сравнивает оба значения.
 
-Защищённые эндпоинты: `/login`, `/register`, `/channels`, `/channels/delete`, `/admin/users/*`.
+Защищённые эндпоинты: `/login`, `/register`, `/channels`, `/channels/delete`, `/channels/members/*`, `/channels/invite`, `/admin/users/*`.
 
 ### Безопасность WebSocket
 
@@ -118,7 +122,7 @@ IP-based ограничение скорости на всех HTTP-эндпои
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: DENY`
 - `Referrer-Policy: strict-origin-when-cross-origin`
-- `Permissions-Policy: microphone=(self), camera=()`
+- `Permissions-Policy: microphone=(self), camera=(self)`
 
 ### Авторизация
 
@@ -127,7 +131,11 @@ IP-based ограничение скорости на всех HTTP-эндпои
 - **Админ-панель:** Доступна только пользователям с `is_admin=1`
 - **Удаление каналов:** Может создатель канала или админ
 - **Создание каналов:** Любой активный аутентифицированный пользователь
-- **Голосовые каналы:** Любой активный аутентифицированный пользователь
+- **Публичные каналы:** Любой активный аутентифицированный пользователь
+- **Приватные каналы:** Только участники, создатель или администраторы
+- **Управление приватными каналами:** Только создатель или администраторы могут добавлять/удалять участников и генерировать invite-ссылки
+- **Invite-ссылки:** Срок действия 7 дней, токен-based, автоматическое добавление при переходе
+- **Чат:** Сообщения ограничены 2000 символами, автоочистка по retention policy
 - **Самозащита:** Админ не может деактивировать/удалить свой аккаунт
 
 ### Предотвращение XSS

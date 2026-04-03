@@ -2,16 +2,60 @@
 
 ## English
 
-Vocipher is configured entirely through environment variables. No config files needed.
+Vocipher is configured via `config.yaml` file and/or environment variables. Env vars override YAML values.
+
+### YAML Configuration
+
+See `config.yaml.example` for a full documented example. Key sections:
+
+```yaml
+server:
+  addr: ":8090"             # HTTP listen address
+  read_timeout: 15          # seconds
+  write_timeout: 30
+  idle_timeout: 120
+
+database:
+  path: "vocipher.db"       # SQLite file path
+  chat_retention_days: 30   # Auto-delete old chat messages (0 = keep forever)
+
+webrtc:
+  nat_ip: ""                # Public IP for ICE candidates (required in Docker)
+  udp_port_min: 40000       # Ephemeral UDP port range
+  udp_port_max: 40200
+
+turn:
+  enabled: false
+  ip: ""                    # Public IP for TURN
+  port: 3478                # UDP TURN port
+  tls_port: 5349            # TLS TURNS port (0 = disabled)
+  tls_host: ""              # Domain for TURNS URI (must match TLS cert)
+  cert_file: ""             # TLS certificate
+  key_file: ""              # TLS private key
+
+auth:
+  session_days: 30
+  min_password: 8
+  cookie_secure: false      # Set true for HTTPS
+  rate_limit_rps: 10
+  rate_limit_burst: 20
+
+security:
+  allowed_origins: []       # Empty = same-origin only
+```
 
 ### Environment Variables
 
+Env vars override YAML settings:
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VOCIPHER_ADDR` | `:8090` | HTTP server listen address (e.g. `:8080`, `127.0.0.1:8090`) |
+| `VOCIPHER_ADDR` | `:8090` | HTTP server listen address |
 | `VOCIPHER_DB_PATH` | `vocipher.db` | Path to SQLite database file |
-| `VOCIPHER_TURN_IP` | *(disabled)* | Public IP address for the embedded TURN server. If not set, TURN is disabled and only STUN is used |
-| `VOCIPHER_NAT_IP` | *(disabled)* | Host IP for WebRTC ICE candidates. Required when running in Docker so peers can reach the server |
+| `VOCIPHER_NAT_IP` | *(disabled)* | Host IP for WebRTC ICE candidates |
+| `VOCIPHER_TURN_IP` | *(disabled)* | Public IP for embedded TURN server |
+| `VOCIPHER_TURN_PORT` | `3478` | TURN UDP port |
+| `VOCIPHER_COOKIE_SECURE` | `false` | Set `true` or `1` for HTTPS |
 
 ### Examples
 
@@ -22,17 +66,10 @@ make run
 # Listens on :8090, DB at ./vocipher.db, no TURN
 ```
 
-**Custom port:**
+**With config file:**
 
 ```bash
-VOCIPHER_ADDR=:3000 ./vocipher
-```
-
-**With TURN enabled:**
-
-```bash
-VOCIPHER_TURN_IP=203.0.113.1 ./vocipher
-# HTTP on :8090, TURN on UDP :3478
+./vocipher -config config.yaml
 ```
 
 **Docker with HTTPS:**
@@ -95,37 +132,35 @@ SQLite database is created automatically on first run. WAL mode is enabled for c
 
 ## Русский
 
-Vocipher настраивается полностью через переменные окружения. Конфигурационные файлы не нужны.
+Vocipher настраивается через файл `config.yaml` и/или переменные окружения. Переменные окружения перекрывают значения из YAML.
+
+### YAML-конфигурация
+
+Полный пример с комментариями -- `config.yaml.example`. Основные секции:
+
+- `server` -- адрес, таймауты HTTP-сервера
+- `database` -- путь к SQLite, `chat_retention_days` (автоочистка чата, 0 = хранить вечно)
+- `webrtc` -- NAT IP, диапазон UDP-портов
+- `turn` -- встроенный TURN/TURNS сервер, TLS-настройки
+- `auth` -- длина сессий, минимальная длина пароля, secure cookie, rate limit
+- `security` -- разрешённые origins для WebSocket
 
 ### Переменные окружения
 
 | Переменная | По умолчанию | Описание |
 |------------|-------------|----------|
-| `VOCIPHER_ADDR` | `:8090` | Адрес HTTP-сервера (например `:8080`, `127.0.0.1:8090`) |
-| `VOCIPHER_DB_PATH` | `vocipher.db` | Путь к файлу SQLite базы данных |
-| `VOCIPHER_TURN_IP` | *(выключен)* | Публичный IP для встроенного TURN-сервера. Если не задан, используется только STUN |
-| `VOCIPHER_NAT_IP` | *(выключен)* | IP хоста для ICE candidates WebRTC. Обязателен при запуске в Docker |
+| `VOCIPHER_ADDR` | `:8090` | Адрес HTTP-сервера |
+| `VOCIPHER_DB_PATH` | `vocipher.db` | Путь к SQLite |
+| `VOCIPHER_NAT_IP` | *(выключен)* | IP хоста для WebRTC ICE candidates |
+| `VOCIPHER_TURN_IP` | *(выключен)* | Публичный IP для TURN-сервера |
+| `VOCIPHER_TURN_PORT` | `3478` | UDP-порт TURN |
+| `VOCIPHER_COOKIE_SECURE` | `false` | `true` или `1` для HTTPS |
 
 ### Примеры
 
-**Разработка (значения по умолчанию):**
-
 ```bash
-make run
-# Слушает :8090, БД в ./vocipher.db, без TURN
-```
-
-**Другой порт:**
-
-```bash
-VOCIPHER_ADDR=:3000 ./vocipher
-```
-
-**С включённым TURN:**
-
-```bash
-VOCIPHER_TURN_IP=203.0.113.1 ./vocipher
-# HTTP на :8090, TURN на UDP :3478
+make run                           # Дефолты: :8090, ./vocipher.db
+./vocipher -config config.yaml     # С конфигом
 ```
 
 ### TURN-сервер
