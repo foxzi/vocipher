@@ -548,8 +548,30 @@ func randomID() string {
 }
 
 func (s *SFU) addOutputTrack(destPeer *Peer, srcUserID int64, srcTrack *webrtc.TrackRemote, kind string) error {
-	// StreamID = kind so client can distinguish camera from screen
-	// TrackID = unique UUID to prevent any collisions across renegotiations
+	// Check if we already have an output track of this kind from this source user
+	destPeer.mu.Lock()
+	switch kind {
+	case "camera":
+		if _, exists := destPeer.cameraOutputTracks[srcUserID]; exists {
+			destPeer.mu.Unlock()
+			log.Printf("webrtc: skipping duplicate %s output track %d->%d", kind, srcUserID, destPeer.UserID)
+			return nil
+		}
+	case "screen":
+		if _, exists := destPeer.screenOutputTracks[srcUserID]; exists {
+			destPeer.mu.Unlock()
+			log.Printf("webrtc: skipping duplicate %s output track %d->%d", kind, srcUserID, destPeer.UserID)
+			return nil
+		}
+	case "audio":
+		if _, exists := destPeer.outputTracks[srcUserID]; exists {
+			destPeer.mu.Unlock()
+			log.Printf("webrtc: skipping duplicate %s output track %d->%d", kind, srcUserID, destPeer.UserID)
+			return nil
+		}
+	}
+	destPeer.mu.Unlock()
+
 	streamID := kind
 	trackID := fmt.Sprintf("%s-%d-%s", kind, srcUserID, randomID())
 	localTrack, err := webrtc.NewTrackLocalStaticRTP(
