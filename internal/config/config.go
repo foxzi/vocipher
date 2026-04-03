@@ -25,7 +25,8 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
-	Path string `yaml:"path"`
+	Path              string `yaml:"path"`
+	ChatRetentionDays int    `yaml:"chat_retention_days"` // 0 = keep forever
 }
 
 type WebRTCConfig struct {
@@ -67,7 +68,8 @@ func Default() *Config {
 			IdleTimeout:  120,
 		},
 		Database: DatabaseConfig{
-			Path: "vocipher.db",
+			Path:              "vocipher.db",
+			ChatRetentionDays: 30,
 		},
 		WebRTC: WebRTCConfig{
 			UDPPortMin:   40000,

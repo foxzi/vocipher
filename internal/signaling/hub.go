@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/kidandcat/vocipher/internal/auth"
 	"github.com/kidandcat/vocipher/internal/channel"
+	"github.com/kidandcat/vocipher/internal/database"
 	rtc "github.com/kidandcat/vocipher/internal/webrtc"
 )
 
@@ -275,6 +276,15 @@ func handleMessage(c *Client, msg Message) {
 		}
 		previewMu.RUnlock()
 
+		// Send chat history to joining user
+		if history, err := database.GetChatHistory(p.ChannelID, 50); err == nil && len(history) > 0 {
+			historyMsg, _ := json.Marshal(map[string]any{
+				"type":     "chat_history",
+				"messages": history,
+			})
+			GlobalHub.SendTo(c.UserID, historyMsg)
+		}
+
 	case "leave_channel":
 		chID := channel.Leave(c.UserID)
 		if chID > 0 {
@@ -388,7 +398,22 @@ func handleMessage(c *Client, msg Message) {
 			return
 		}
 		// Generate message ID for reactions
-		msgID := fmt.Sprintf("%d-%d", c.UserID, time.Now().UnixMilli())
+		now := time.Now()
+		msgID := fmt.Sprintf("%d-%d", c.UserID, now.UnixMilli())
+		ts := now.Unix()
+
+		// Save to database
+		if err := database.SaveChatMessage(database.ChatMessage{
+			ID:        msgID,
+			ChannelID: chID,
+			UserID:    c.UserID,
+			Username:  c.Username,
+			Text:      text,
+			CreatedAt: ts,
+		}); err != nil {
+			log.Printf("signaling: failed to save chat message: %v", err)
+		}
+
 		chatMsg, _ := json.Marshal(map[string]any{
 			"type":       "chat_message",
 			"id":         msgID,
@@ -396,7 +421,7 @@ func handleMessage(c *Client, msg Message) {
 			"username":   c.Username,
 			"text":       text,
 			"channel_id": chID,
-			"timestamp":  time.Now().Unix(),
+			"timestamp":  ts,
 		})
 		GlobalHub.BroadcastToChannel(chID, chatMsg)
 
