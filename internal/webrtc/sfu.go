@@ -1,6 +1,8 @@
 package webrtc
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -539,11 +541,17 @@ func (s *SFU) forwardRTP(track *webrtc.TrackRemote, userID int64, kind string, b
 	}
 }
 
+func randomID() string {
+	b := make([]byte, 8)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
 func (s *SFU) addOutputTrack(destPeer *Peer, srcUserID int64, srcTrack *webrtc.TrackRemote, kind string) error {
 	// StreamID = kind so client can distinguish camera from screen
-	// TrackID = kind-srcUserID to make it unique per source user
+	// TrackID = unique UUID to prevent any collisions across renegotiations
 	streamID := kind
-	trackID := fmt.Sprintf("%s-%d", kind, srcUserID)
+	trackID := fmt.Sprintf("%s-%d-%s", kind, srcUserID, randomID())
 	localTrack, err := webrtc.NewTrackLocalStaticRTP(
 		srcTrack.Codec().RTPCodecCapability,
 		trackID,
