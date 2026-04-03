@@ -977,13 +977,18 @@ function handleRemoteCameraTrack(stream, track, mid) {
     const grid = document.getElementById('camera-grid');
     if (!grid) return;
 
-    // Check if any existing video element already shows this exact track
+    console.log('handleRemoteCameraTrack:', { mid, trackId: track.id, streamId: stream.id, trackLabel: track.label });
+
+    // Check if any existing video element already shows this exact track object
     const allCams = grid.querySelectorAll('[id^="remote-cam-"] video');
     for (const v of allCams) {
-        if (v.srcObject && v.srcObject.getVideoTracks().some(t => t.id === track.id)) {
-            // Already displayed, just make sure it's playing
-            v.play().catch(() => {});
-            return;
+        if (v.srcObject) {
+            const existingTracks = v.srcObject.getVideoTracks();
+            // Compare by track object reference, not just ID
+            if (existingTracks.some(t => t === track)) {
+                v.play().catch(() => {});
+                return;
+            }
         }
     }
 
