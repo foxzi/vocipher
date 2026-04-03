@@ -1,0 +1,133 @@
+package config
+
+import (
+	"log"
+	"os"
+	"strconv"
+
+	"gopkg.in/yaml.v3"
+)
+
+type Config struct {
+	Server   ServerConfig   `yaml:"server"`
+	Database DatabaseConfig `yaml:"database"`
+	WebRTC   WebRTCConfig   `yaml:"webrtc"`
+	TURN     TURNConfig     `yaml:"turn"`
+	Auth     AuthConfig     `yaml:"auth"`
+	Security SecurityConfig `yaml:"security"`
+}
+
+type ServerConfig struct {
+	Addr         string `yaml:"addr"`
+	ReadTimeout  int    `yaml:"read_timeout"`  // seconds
+	WriteTimeout int    `yaml:"write_timeout"` // seconds
+	IdleTimeout  int    `yaml:"idle_timeout"`  // seconds
+}
+
+type DatabaseConfig struct {
+	Path string `yaml:"path"`
+}
+
+type WebRTCConfig struct {
+	NATIP        string `yaml:"nat_ip"`
+	UDPPortMin   uint16 `yaml:"udp_port_min"`
+	UDPPortMax   uint16 `yaml:"udp_port_max"`
+	MaxMessageKB int    `yaml:"max_message_kb"` // WebSocket message size limit
+}
+
+type TURNConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	IP      string `yaml:"ip"`
+	Port    int    `yaml:"port"`
+}
+
+type AuthConfig struct {
+	SessionDays    int  `yaml:"session_days"`
+	MinPassword    int  `yaml:"min_password"`
+	CookieSecure   bool `yaml:"cookie_secure"`
+	RateLimitRPS   int  `yaml:"rate_limit_rps"`
+	RateLimitBurst int  `yaml:"rate_limit_burst"`
+}
+
+type SecurityConfig struct {
+	AllowedOrigins []string `yaml:"allowed_origins"` // empty = same-origin only
+}
+
+// Default returns config with sensible defaults.
+func Default() *Config {
+	return &Config{
+		Server: ServerConfig{
+			Addr:         ":8090",
+			ReadTimeout:  15,
+			WriteTimeout: 30,
+			IdleTimeout:  120,
+		},
+		Database: DatabaseConfig{
+			Path: "vocipher.db",
+		},
+		WebRTC: WebRTCConfig{
+			UDPPortMin:   40000,
+			UDPPortMax:   40200,
+			MaxMessageKB: 512,
+		},
+		TURN: TURNConfig{
+			Port: 3478,
+		},
+		Auth: AuthConfig{
+			SessionDays:    30,
+			MinPassword:    8,
+			CookieSecure:   false,
+			RateLimitRPS:   10,
+			RateLimitBurst: 20,
+		},
+	}
+}
+
+// Load reads config from a YAML file, then applies env var overrides.
+func Load(path string) *Config {
+	cfg := Default()
+
+	if path != "" {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if !os.IsNotExist(err) {
+				log.Fatalf("config: failed to read %s: %v", path, err)
+			}
+			log.Printf("config: %s not found, using defaults", path)
+		} else {
+			if err := yaml.Unmarshal(data, cfg); err != nil {
+				log.Fatalf("config: failed to parse %s: %v", path, err)
+			}
+			log.Printf("config: loaded from %s", path)
+		}
+	}
+
+	// Env vars override YAML values
+	envOverrides(cfg)
+
+	return cfg
+}
+
+func envOverrides(cfg *Config) {
+	if v := os.Getenv("VOCIPHER_ADDR"); v != "" {
+		cfg.Server.Addr = v
+	}
+	if v := os.Getenv("VOCIPHER_DB_PATH"); v != "" {
+		cfg.Database.Path = v
+	}
+	if v := os.Getenv("VOCIPHER_NAT_IP"); v != "" {
+		cfg.WebRTC.NATIP = v
+	}
+	if v := os.Getenv("VOCIPHER_TURN_IP"); v != "" {
+		cfg.TURN.Enabled = true
+		cfg.TURN.IP = v
+	}
+	if v := os.Getenv("VOCIPHER_TURN_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			cfg.TURN.Port = p
+		}
+	}
+	if v := os.Getenv("VOCIPHER_COOKIE_SECURE"); v == "true" || v == "1" {
+		cfg.Auth.CookieSecure = true
+	}
+}

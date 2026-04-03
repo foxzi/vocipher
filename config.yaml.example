@@ -1,0 +1,33 @@
+# Vocipher configuration
+# Copy to config.yaml and adjust values as needed.
+# Environment variables override these settings.
+
+server:
+  addr: ":8090"             # HTTP listen address
+  read_timeout: 15          # seconds
+  write_timeout: 30         # seconds
+  idle_timeout: 120         # seconds
+
+database:
+  path: "vocipher.db"       # SQLite database file path
+
+webrtc:
+  nat_ip: ""                # Host IP for ICE candidates (required in Docker)
+  udp_port_min: 40000       # Ephemeral UDP port range start
+  udp_port_max: 40200       # Ephemeral UDP port range end
+  max_message_kb: 512       # Max WebSocket message size in KB
+
+turn:
+  enabled: false            # Enable built-in TURN server
+  ip: ""                    # Public IP for TURN (required if enabled)
+  port: 3478                # TURN UDP port
+
+auth:
+  session_days: 30          # Session expiry in days
+  min_password: 8           # Minimum password length
+  cookie_secure: false      # Set to true when using HTTPS
+  rate_limit_rps: 10        # Requests per second per IP
+  rate_limit_burst: 20      # Burst limit
+
+security:
+  allowed_origins: []       # Empty = same-origin only. Add domains for CORS.

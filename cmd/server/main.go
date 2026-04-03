@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"html/template"
 	"log"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/kidandcat/vocipher/internal/auth"
 	"github.com/kidandcat/vocipher/internal/channel"
+	"github.com/kidandcat/vocipher/internal/config"
 	"github.com/kidandcat/vocipher/internal/database"
 	"github.com/kidandcat/vocipher/internal/signaling"
 	embeddedTurn "github.com/kidandcat/vocipher/internal/turn"
@@ -29,6 +31,7 @@ import (
 
 var templates map[string]*template.Template
 var cacheBust = fmt.Sprintf("%d", time.Now().Unix())
+var cfg *config.Config
 
 // Context key for authenticated user (#15 — avoid double DB query)
 type ctxKey string
@@ -71,8 +74,13 @@ func (l *ipLimiter) get(ip string) *rate.Limiter {
 	if lim, ok := l.limiters[ip]; ok {
 		return lim
 	}
-	// 10 requests per second, burst of 20
-	lim := rate.NewLimiter(10, 20)
+	rps := 10
+	burst := 20
+	if cfg != nil {
+		rps = cfg.Auth.RateLimitRPS
+		burst = cfg.Auth.RateLimitBurst
+	}
+	lim := rate.NewLimiter(rate.Limit(rps), burst)
 	l.limiters[ip] = lim
 	return lim
 }
@@ -146,13 +154,17 @@ func setCSRFCookie(w http.ResponseWriter, r *http.Request) string {
 // --- Cookie helper (#14) ---
 
 func sessionCookie(token string, maxAge int) *http.Cookie {
+	secure := false
+	if cfg != nil {
+		secure = cfg.Auth.CookieSecure
+	}
 	return &http.Cookie{
 		Name:     "session",
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   false, // Set to true when behind TLS
+		Secure:   secure,
 		MaxAge:   maxAge,
 	}
 }
@@ -160,22 +172,33 @@ func sessionCookie(token string, maxAge int) *http.Cookie {
 // --- Main ---
 
 func main() {
-	dbPath := os.Getenv("VOCIPHER_DB_PATH")
-	if dbPath == "" {
-		dbPath = "vocipher.db"
-	}
-	database.Init(dbPath)
+	configPath := flag.String("config", "config.yaml", "path to config file")
+	flag.Parse()
+
+	cfg = config.Load(*configPath)
+
+	database.Init(cfg.Database.Path)
 
 	// Set NAT IP for WebRTC ICE candidates (required in Docker)
-	if natIP := os.Getenv("VOCIPHER_NAT_IP"); natIP != "" {
-		rtc.SetNATIP(natIP)
+	if cfg.WebRTC.NATIP != "" {
+		rtc.SetNATIP(cfg.WebRTC.NATIP)
+	}
+	if cfg.WebRTC.UDPPortMin > 0 && cfg.WebRTC.UDPPortMax > 0 {
+		rtc.SetUDPPortRange(cfg.WebRTC.UDPPortMin, cfg.WebRTC.UDPPortMax)
 	}
 
-	// Start embedded TURN server if public IP is configured
-	turnPublicIP := os.Getenv("VOCIPHER_TURN_IP")
-	if turnPublicIP != "" {
-		cfg := embeddedTurn.DefaultConfig(turnPublicIP)
-		turnServer, err := embeddedTurn.Start(cfg)
+	// Set WebSocket message size limit
+	if cfg.WebRTC.MaxMessageKB > 0 {
+		signaling.SetMaxMessageSize(int64(cfg.WebRTC.MaxMessageKB) * 1024)
+	}
+
+	// Start embedded TURN server if configured
+	if cfg.TURN.Enabled && cfg.TURN.IP != "" {
+		turnCfg := embeddedTurn.DefaultConfig(cfg.TURN.IP)
+		if cfg.TURN.Port > 0 {
+			turnCfg.Port = cfg.TURN.Port
+		}
+		turnServer, err := embeddedTurn.Start(turnCfg)
 		if err != nil {
 			log.Fatal("failed to start TURN server:", err)
 		}
@@ -186,7 +209,7 @@ func main() {
 		log.Printf("TURN credentials: uri=%s user=%s", uri, username)
 	}
 
-	// Periodic session cleanup (#5)
+	// Periodic session cleanup
 	go func() {
 		for {
 			auth.CleanExpiredSessions()
@@ -201,12 +224,12 @@ func main() {
 	// Static files
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 
-	// Auth routes (with method check #10)
+	// Auth routes
 	mux.HandleFunc("/login", handleLogin)
 	mux.HandleFunc("/register", handleRegister)
 	mux.HandleFunc("/logout", handleLogout)
 
-	// App routes (auth required, CSRF on POST)
+	// App routes
 	mux.HandleFunc("/", requireAuth(handleApp))
 	mux.HandleFunc("/channels", requireAuth(csrfProtect(handleChannels)))
 	mux.HandleFunc("/channels/delete", requireAuth(csrfProtect(handleDeleteChannel)))
@@ -222,24 +245,19 @@ func main() {
 	// WebSocket
 	mux.HandleFunc("/ws", signaling.HandleWebSocket)
 
-	// Wrap with middleware: security headers -> rate limiting -> mux
 	handler := securityHeaders(rateLimitMiddleware(mux))
 
-	addr := os.Getenv("VOCIPHER_ADDR")
-	if addr == "" {
-		addr = ":8090"
-	}
 	server := &http.Server{
-		Addr:         addr,
+		Addr:         cfg.Server.Addr,
 		Handler:      handler,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		ReadTimeout:  time.Duration(cfg.Server.ReadTimeout) * time.Second,
+		WriteTimeout: time.Duration(cfg.Server.WriteTimeout) * time.Second,
+		IdleTimeout:  time.Duration(cfg.Server.IdleTimeout) * time.Second,
 	}
 
-	// Graceful shutdown (#17)
+	// Graceful shutdown
 	go func() {
-		log.Printf("Vocipher server starting on http://localhost%s", addr)
+		log.Printf("Vocipher server starting on http://localhost%s", cfg.Server.Addr)
 		if err := server.ListenAndServe(); err != http.ErrServerClosed {
 			log.Fatal("server error:", err)
 		}

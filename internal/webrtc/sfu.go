@@ -51,9 +51,21 @@ var (
 	natIP   string
 )
 
+var (
+	udpPortMin uint16
+	udpPortMax uint16
+)
+
 func SetNATIP(ip string) {
 	natIP = ip
 	log.Printf("webrtc: NAT 1:1 IP set to %s", ip)
+}
+
+// SetUDPPortRange sets the ephemeral UDP port range for WebRTC.
+func SetUDPPortRange(min, max uint16) {
+	udpPortMin = min
+	udpPortMax = max
+	log.Printf("webrtc: UDP port range set to %d-%d", min, max)
 }
 
 func getAPI() *webrtc.API {
@@ -79,10 +91,14 @@ func getAPI() *webrtc.API {
 			webrtc.WithInterceptorRegistry(i),
 		}
 
-		if natIP != "" {
+		if natIP != "" || udpPortMin > 0 {
 			s := webrtc.SettingEngine{}
-			s.SetNAT1To1IPs([]string{natIP}, webrtc.ICECandidateTypeHost)
-			s.SetEphemeralUDPPortRange(40000, 40200)
+			if natIP != "" {
+				s.SetNAT1To1IPs([]string{natIP}, webrtc.ICECandidateTypeHost)
+			}
+			if udpPortMin > 0 && udpPortMax > 0 {
+				s.SetEphemeralUDPPortRange(udpPortMin, udpPortMax)
+			}
 			opts = append(opts, webrtc.WithSettingEngine(s))
 		}
 

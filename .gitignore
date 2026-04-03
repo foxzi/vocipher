@@ -11,3 +11,4 @@ server
 vocipher
 nginx/certs/
 .env
+config.yaml

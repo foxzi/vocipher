@@ -12,8 +12,13 @@ import (
 	rtc "github.com/kidandcat/vocipher/internal/webrtc"
 )
 
-// Maximum WebSocket message size (512 KB — enough for screen preview base64)
-const maxMessageSize = 512 * 1024
+// Maximum WebSocket message size (default 512 KB)
+var maxMessageSize int64 = 512 * 1024
+
+// SetMaxMessageSize overrides the default WebSocket message size limit.
+func SetMaxMessageSize(size int64) {
+	maxMessageSize = size
+}
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
