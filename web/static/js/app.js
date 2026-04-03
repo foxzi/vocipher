@@ -975,7 +975,11 @@ function handleRemoteCameraTrack(stream, track) {
     const grid = document.getElementById('camera-grid');
     if (!grid) return;
 
-    const camId = 'remote-cam-' + track.id;
+    // Extract userID from track.id (format: "camera-{userID}")
+    // Use userID for stable DOM element ID across renegotiations
+    const parts = track.id.split('-');
+    const srcUserId = parts.length > 1 ? parts[parts.length - 1] : track.id;
+    const camId = 'remote-cam-' + srcUserId;
     const existing = document.getElementById(camId);
     if (existing) {
         const video = existing.querySelector('video');
@@ -1005,6 +1009,7 @@ function handleRemoteCameraTrack(stream, track) {
     track.onended = () => {
         removeFromCameraGrid(camId);
     };
+    track.onmute = () => {};  // ignore mute during renegotiation
 }
 
 function removeFromCameraGrid(id) {
