@@ -247,6 +247,7 @@ func main() {
 	mux.HandleFunc("/admin/users/make-admin", requireAdmin(csrfProtect(handleAdminMakeAdmin)))
 	mux.HandleFunc("/admin/users/revoke-admin", requireAdmin(csrfProtect(handleAdminRevokeAdmin)))
 	mux.HandleFunc("/admin/users/delete", requireAdmin(csrfProtect(handleAdminDeleteUser)))
+	mux.HandleFunc("/admin/users/reset-password", requireAdmin(csrfProtect(handleAdminResetPassword)))
 
 	// WebSocket
 	mux.HandleFunc("/ws", signaling.HandleWebSocket)
@@ -668,4 +669,31 @@ func handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 	adminUserAction(w, r, func(id int64) error {
 		return auth.DeleteUser(id)
 	}, "User+deleted")
+}
+
+func handleAdminResetPassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userID, err := strconv.ParseInt(r.FormValue("user_id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid user_id", http.StatusBadRequest)
+		return
+	}
+
+	newPassword := r.FormValue("new_password")
+	if len(newPassword) < 8 {
+		http.Redirect(w, r, "/admin?flash=Password+must+be+at+least+8+characters", http.StatusSeeOther)
+		return
+	}
+
+	if err := auth.SetUserPassword(userID, newPassword); err != nil {
+		log.Printf("admin: failed to reset password for user %d: %v", userID, err)
+		http.Redirect(w, r, "/admin?flash=Failed+to+reset+password", http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, "/admin?flash=Password+reset+successfully", http.StatusSeeOther)
 }

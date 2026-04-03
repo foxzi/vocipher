@@ -186,6 +186,20 @@ func SetUserAdmin(userID int64, admin bool) error {
 	return err
 }
 
+// SetUserPassword changes a user's password and invalidates all sessions.
+func SetUserPassword(userID int64, newPassword string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	if _, err := database.DB.Exec("UPDATE users SET password_hash = ? WHERE id = ?", string(hash), userID); err != nil {
+		return err
+	}
+	// Invalidate all sessions so user must re-login
+	database.DB.Exec("DELETE FROM sessions WHERE user_id = ?", userID)
+	return nil
+}
+
 // DeleteUser removes a user and all their sessions.
 func DeleteUser(userID int64) error {
 	_, err := database.DB.Exec("DELETE FROM users WHERE id = ?", userID)
