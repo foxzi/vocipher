@@ -891,6 +891,8 @@ async function startCamera() {
         videoTrack.onended = () => stopCamera();
     } catch (err) {
         console.error('Failed to start camera:', err);
+        // Make sure expectCamera flag is cleared on server
+        sendWS({ type: 'camera_off' });
     }
 }
 
