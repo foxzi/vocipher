@@ -22,6 +22,8 @@ contents:
     dst: /usr/share/vocala/web/static/js/
   - src: ./web/static/img/
     dst: /usr/share/vocala/web/static/img/
+  - src: ./web/static/img/avatars/
+    dst: /usr/share/vocala/web/static/img/avatars/
 
   # Config
   - src: ./packaging/config.yaml.default

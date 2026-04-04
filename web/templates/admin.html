@@ -48,9 +48,7 @@
                         <tr class="border-b border-vc-border/50 hover:bg-vc-hover/30 transition">
                             <td class="px-6 py-4">
                                 <div class="flex items-center gap-3">
-                                    <div class="w-8 h-8 rounded-full {{if .IsActive}}bg-vc-accent{{else}}bg-vc-muted{{end}} flex items-center justify-center text-white text-sm font-bold">
-                                        {{slice .Username 0 1}}
-                                    </div>
+                                    <img class="admin-avatar w-8 h-8 rounded-full {{if not .IsActive}}opacity-40{{end}}" data-username="{{.Username}}" src="" alt="">
                                     <span class="font-medium">{{.Username}}</span>
                                 </div>
                             </td>
@@ -156,6 +154,19 @@
 </div>
 
 <script>
+const AVATAR_COUNT = 50;
+function avatarURL(username) {
+    let hash = 0;
+    for (let i = 0; i < username.length; i++) {
+        hash = ((hash << 5) - hash + username.charCodeAt(i)) | 0;
+    }
+    const idx = Math.abs(hash) % AVATAR_COUNT;
+    return '/static/img/avatars/pa' + idx + '.svg';
+}
+// Set all admin avatars
+document.querySelectorAll('.admin-avatar').forEach(el => {
+    el.src = avatarURL(el.dataset.username);
+});
 function showResetPassword(userId, username) {
     document.getElementById('reset-password-user-id').value = userId;
     document.getElementById('reset-password-username').textContent = 'User: ' + username;

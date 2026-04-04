@@ -10,6 +10,17 @@ function escapeHTML(str) {
     return div.innerHTML;
 }
 
+// Local pixel-art avatar by username hash
+const AVATAR_COUNT = 50;
+function avatarURL(username) {
+    let hash = 0;
+    for (let i = 0; i < username.length; i++) {
+        hash = ((hash << 5) - hash + username.charCodeAt(i)) | 0;
+    }
+    const idx = Math.abs(hash) % AVATAR_COUNT;
+    return `/static/img/avatars/pa${idx}.svg`;
+}
+
 // WebRTC state
 let peerConnection = null;
 let localStream = null;
@@ -192,7 +203,7 @@ function updateChannelUsers(channelID, users) {
         if (existing) {
             // Update in place
             const avatar = existing.querySelector('.sb-avatar');
-            if (avatar) avatar.className = `sb-avatar w-6 h-6 rounded-full ${u.Speaking ? 'bg-vc-green ring-2 ring-vc-green/40' : 'bg-vc-channel'} flex items-center justify-center text-xs font-bold text-white`;
+            if (avatar) avatar.className = `sb-avatar w-6 h-6 rounded-full ${u.Speaking ? 'ring-2 ring-vc-green/40' : ''} overflow-hidden`;
             const name = existing.querySelector('.sb-name');
             if (name) name.className = `sb-name ${u.Muted ? 'text-vc-muted line-through' : 'text-vc-text'}`;
             const muteIcon = existing.querySelector('.sb-mute');
@@ -205,8 +216,8 @@ function updateChannelUsers(channelID, users) {
             div.className = 'flex items-center gap-2 px-2 py-1 rounded text-sm fade-in';
             div.innerHTML = `
                 <div class="relative">
-                    <div class="sb-avatar w-6 h-6 rounded-full ${u.Speaking ? 'bg-vc-green ring-2 ring-vc-green/40' : 'bg-vc-channel'} flex items-center justify-center text-xs font-bold text-white">
-                        ${escapeHTML(u.Username.charAt(0).toUpperCase())}
+                    <div class="sb-avatar w-6 h-6 rounded-full ${u.Speaking ? 'ring-2 ring-vc-green/40' : ''} overflow-hidden">
+                        <img src="${avatarURL(u.Username)}" alt="" class="w-full h-full">
                     </div>
                 </div>
                 <span class="sb-name ${u.Muted ? 'text-vc-muted line-through' : 'text-vc-text'}">${escapeHTML(u.Username)}</span>
@@ -427,7 +438,7 @@ function updateMainContent(channelID, users) {
 
             const avatar = existing.querySelector('.avatar-circle');
             if (avatar) {
-                avatar.className = `avatar-circle w-16 h-16 rounded-full ${u.Speaking ? 'bg-vc-green ring-4 ring-vc-green/30' : 'bg-vc-channel'} flex items-center justify-center text-2xl font-bold text-white transition-all`;
+                avatar.className = `avatar-circle w-16 h-16 rounded-full ${u.Speaking ? 'ring-4 ring-vc-green/30' : ''} overflow-hidden transition-all`;
             }
 
             const muteIndicator = existing.querySelector('.mute-indicator');
@@ -447,8 +458,8 @@ function updateMainContent(channelID, users) {
             card.className = `flex flex-col items-center gap-3 p-4 rounded-xl bg-vc-sidebar/50 border ${u.Speaking ? 'border-vc-green shadow-lg shadow-vc-green/20' : 'border-vc-border'} fade-in transition-all duration-200`;
             card.innerHTML = `
                 <div class="relative">
-                    <div class="avatar-circle w-16 h-16 rounded-full ${u.Speaking ? 'bg-vc-green ring-4 ring-vc-green/30' : 'bg-vc-channel'} flex items-center justify-center text-2xl font-bold text-white transition-all">
-                        ${escapeHTML(u.Username.charAt(0).toUpperCase())}
+                    <div class="avatar-circle w-16 h-16 rounded-full ${u.Speaking ? 'ring-4 ring-vc-green/30' : ''} overflow-hidden transition-all">
+                        <img src="${avatarURL(u.Username)}" alt="" class="w-full h-full">
                     </div>
                     <div class="mute-indicator absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-vc-red flex items-center justify-center" style="display:${u.Muted ? '' : 'none'}"><svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/></svg></div>
                 </div>
@@ -1383,6 +1394,12 @@ function isInputFocused() {
 
 // ─── Init ─────────────────────────────────────────────────────
 
+// Set self avatar
+const selfAvatar = document.getElementById('self-avatar');
+if (selfAvatar && selfAvatar.dataset.username) {
+    selfAvatar.src = avatarURL(selfAvatar.dataset.username);
+}
+
 connectWS();
 checkMicPermission();
 
@@ -1477,12 +1494,17 @@ function appendChatMessage(msg) {
     const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     el.innerHTML = `
-        <div class="flex items-baseline gap-1.5">
-            <span class="text-xs font-semibold text-vc-accent">${escapeHTML(msg.username)}</span>
-            <span class="text-[10px] text-vc-muted">${timeStr}</span>
+        <div class="flex gap-2">
+            <img src="${avatarURL(msg.username)}" alt="" class="w-6 h-6 rounded-full flex-shrink-0 mt-0.5">
+            <div class="min-w-0 flex-1">
+                <div class="flex items-baseline gap-1.5">
+                    <span class="text-xs font-semibold text-vc-accent">${escapeHTML(msg.username)}</span>
+                    <span class="text-[10px] text-vc-muted">${timeStr}</span>
+                </div>
+                <div class="text-sm text-vc-text break-words">${escapeHTML(msg.text)}</div>
+                <div class="reactions flex flex-wrap gap-1 mt-0.5" id="reactions-${msg.id}"></div>
+            </div>
         </div>
-        <div class="text-sm text-vc-text break-words">${escapeHTML(msg.text)}</div>
-        <div class="reactions flex flex-wrap gap-1 mt-0.5" id="reactions-${msg.id}"></div>
         <button onclick="showReactionPicker('${msg.id}')"
             class="absolute right-1 top-0.5 opacity-0 group-hover:opacity-100 text-xs bg-vc-channel hover:bg-vc-hover rounded px-1 py-0.5 transition text-vc-muted">
             +
@@ -1846,7 +1868,7 @@ async function loadMembers(channelId) {
         list.innerHTML = data.members.map(m => `
             <div class="flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-vc-hover/30 transition">
                 <div class="flex items-center gap-2">
-                    <div class="w-6 h-6 rounded-full bg-vc-accent/30 flex items-center justify-center text-xs font-bold text-vc-accent">${escapeHTML(m.Username.charAt(0))}</div>
+                    <img src="${avatarURL(m.Username)}" alt="" class="w-6 h-6 rounded-full">
                     <span class="text-sm text-vc-text">${escapeHTML(m.Username)}</span>
                     ${m.UserID === data.created_by ? '<span class="text-[10px] text-vc-yellow bg-vc-yellow/10 px-1 rounded">owner</span>' : ''}
                 </div>

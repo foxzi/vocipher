@@ -59,9 +59,7 @@
         <div class="p-3 bg-vc-bg/50 border-t border-vc-border">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
-                    <div id="self-avatar" class="w-8 h-8 rounded-full bg-vc-accent flex items-center justify-center text-white text-sm font-bold transition-all duration-200">
-                        {{slice .User.Username 0 1}}
-                    </div>
+                    <img id="self-avatar" data-username="{{.User.Username}}" src="" alt="" class="w-8 h-8 rounded-full transition-all duration-200">
                     <div>
                         <div class="text-sm font-medium flex items-center gap-1.5">
                             {{.User.Username}}
