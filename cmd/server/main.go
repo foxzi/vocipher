@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -25,6 +24,7 @@ import (
 	"github.com/foxzi/vocala/internal/channel"
 	"github.com/foxzi/vocala/internal/config"
 	"github.com/foxzi/vocala/internal/database"
+	"github.com/foxzi/vocala/internal/logger"
 	"github.com/foxzi/vocala/internal/signaling"
 	embeddedTurn "github.com/foxzi/vocala/internal/turn"
 	rtc "github.com/foxzi/vocala/internal/webrtc"
@@ -143,12 +143,23 @@ func rateLimitMiddleware(next http.Handler) http.Handler {
 
 // --- Security headers (#9) ---
 
+var httpsDetected sync.Once
+
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		w.Header().Set("Permissions-Policy", "microphone=(self), camera=(self)")
+		// Auto-detect HTTPS and enable secure cookies
+		if cfg != nil && !cfg.Auth.CookieSecure {
+			if r.Header.Get("X-Forwarded-Proto") == "https" || r.TLS != nil {
+				httpsDetected.Do(func() {
+					cfg.Auth.CookieSecure = true
+					logger.Info("HTTPS detected, cookie_secure auto-enabled")
+				})
+			}
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -391,12 +402,14 @@ func main() {
 	args := flag.Args()
 	if len(args) > 0 {
 		cfg = config.Load(*configPath)
+		logger.SetLevel(logger.ParseLevel(cfg.Server.LogLevel))
 		database.Init(cfg.Database.Path)
 		runCLI(args)
 		return
 	}
 
 	cfg = config.Load(*configPath)
+	logger.SetLevel(logger.ParseLevel(cfg.Server.LogLevel))
 
 	database.Init(cfg.Database.Path)
 
@@ -426,13 +439,13 @@ func main() {
 
 		turnServer, err := embeddedTurn.Start(turnCfg)
 		if err != nil {
-			log.Fatal("failed to start TURN server:", err)
+			logger.Fatal("failed to start TURN server:", err)
 		}
 		defer turnServer.Close()
 
 		username, password, uris := turnServer.Credentials()
 		rtc.SetTURNCredentials(uris, username, password)
-		log.Printf("TURN credentials: uris=%v user=%s", uris, username)
+		logger.Info("TURN enabled: uris=%v", uris)
 	}
 
 	// Periodic session cleanup
@@ -448,9 +461,9 @@ func main() {
 		go func() {
 			for {
 				if n, err := database.CleanupOldMessages(cfg.Database.ChatRetentionDays); err != nil {
-					log.Printf("chat cleanup error: %v", err)
+					logger.Error("chat cleanup error: %v", err)
 				} else if n > 0 {
-					log.Printf("chat cleanup: removed %d old messages", n)
+					logger.Info("chat cleanup: removed %d old messages", n)
 				}
 				time.Sleep(6 * time.Hour)
 			}
@@ -505,9 +518,9 @@ func main() {
 
 	// Graceful shutdown
 	go func() {
-		log.Printf("Vocala server starting on http://localhost%s", cfg.Server.Addr)
+		logger.Info("Vocala server starting on %s", cfg.Server.Addr)
 		if err := server.ListenAndServe(); err != http.ErrServerClosed {
-			log.Fatal("server error:", err)
+			logger.Fatal("server error:", err)
 		}
 	}()
 
@@ -515,13 +528,13 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	logger.Info("Shutting down server...")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
-		log.Fatal("server shutdown error:", err)
+		logger.Fatal("server shutdown error:", err)
 	}
-	log.Println("Server stopped")
+	logger.Info("Server stopped")
 }
 
 // --- Middleware ---
@@ -614,7 +627,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	token, err := auth.CreateSession(user.ID)
 	if err != nil {
-		log.Printf("failed to create session for user %d: %v", user.ID, err)
+		logger.Error("failed to create session for user %d: %v", user.ID, err)
 		csrfToken := setCSRFCookie(w, r)
 		templates["login.html"].ExecuteTemplate(w, "layout.html", map[string]any{
 			"Error":     "Something went wrong",
@@ -697,7 +710,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 
 	token, err := auth.CreateSession(user.ID)
 	if err != nil {
-		log.Printf("failed to create session for user %d: %v", user.ID, err)
+		logger.Error("failed to create session for user %d: %v", user.ID, err)
 		csrfToken := setCSRFCookie(w, r)
 		templates["register.html"].ExecuteTemplate(w, "layout.html", map[string]any{
 			"Error":     "Something went wrong",
@@ -739,7 +752,7 @@ func handleApp(w http.ResponseWriter, r *http.Request) {
 	user := userFromContext(r)
 	channels, err := channel.List()
 	if err != nil {
-		log.Printf("failed to list channels: %v", err)
+		logger.Error("failed to list channels: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -782,13 +795,13 @@ func handleChannels(w http.ResponseWriter, r *http.Request) {
 	isPrivate := r.FormValue("is_private") == "on"
 	if name != "" {
 		if _, err := channel.Create(name, user.ID, isPrivate); err != nil {
-			log.Printf("failed to create channel: %v", err)
+			logger.Error("failed to create channel: %v", err)
 		}
 	}
 
 	channels, err := channel.List()
 	if err != nil {
-		log.Printf("failed to list channels: %v", err)
+		logger.Error("failed to list channels: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -829,13 +842,13 @@ func handleDeleteChannel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := channel.Delete(id); err != nil {
-		log.Printf("failed to delete channel %d: %v", id, err)
+		logger.Error("failed to delete channel %d: %v", id, err)
 	}
 	signaling.ClearChannelPreview(id)
 
 	channels, err := channel.List()
 	if err != nil {
-		log.Printf("failed to list channels: %v", err)
+		logger.Error("failed to list channels: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -859,7 +872,7 @@ func handleAdmin(w http.ResponseWriter, r *http.Request) {
 
 	users, err := auth.ListUsers()
 	if err != nil {
-		log.Printf("failed to list users: %v", err)
+		logger.Error("failed to list users: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -894,7 +907,7 @@ func adminUserAction(w http.ResponseWriter, r *http.Request, action func(int64) 
 	}
 
 	if err := action(userID); err != nil {
-		log.Printf("admin action failed for user %d: %v", userID, err)
+		logger.Error("admin action failed for user %d: %v", userID, err)
 	}
 
 	http.Redirect(w, r, "/admin?flash="+flash, http.StatusSeeOther)
@@ -978,7 +991,7 @@ func handleAdminResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := auth.SetUserPassword(userID, newPassword); err != nil {
-		log.Printf("admin: failed to reset password for user %d: %v", userID, err)
+		logger.Error("admin: failed to reset password for user %d: %v", userID, err)
 		http.Redirect(w, r, "/admin?flash=Failed+to+reset+password", http.StatusSeeOther)
 		return
 	}
@@ -1142,7 +1155,7 @@ func handleChannelInvite(w http.ResponseWriter, r *http.Request) {
 
 	token, err := channel.CreateInvite(chID, user.ID)
 	if err != nil {
-		log.Printf("failed to create invite: %v", err)
+		logger.Error("failed to create invite: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}

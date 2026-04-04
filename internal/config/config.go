@@ -22,6 +22,7 @@ type ServerConfig struct {
 	ReadTimeout  int    `yaml:"read_timeout"`  // seconds
 	WriteTimeout int    `yaml:"write_timeout"` // seconds
 	IdleTimeout  int    `yaml:"idle_timeout"`  // seconds
+	LogLevel     string `yaml:"log_level"`     // debug, info, warn, error
 }
 
 type DatabaseConfig struct {
@@ -67,6 +68,7 @@ func Default() *Config {
 			ReadTimeout:  15,
 			WriteTimeout: 30,
 			IdleTimeout:  120,
+			LogLevel:     "info",
 		},
 		Database: DatabaseConfig{
 			Path:              "vocala.db",

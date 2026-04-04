@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"fmt"
-	"log"
+	"github.com/foxzi/vocala/internal/logger"
 	"net"
 
 	pionTurn "github.com/pion/turn/v4"
@@ -94,7 +94,7 @@ func Start(cfg Config) (*Server, error) {
 			RelayAddressGenerator: relayGen,
 		},
 	}
-	log.Printf("TURN server listening on UDP %s (public IP: %s)", udpAddr, cfg.PublicIP)
+	logger.Info("TURN server listening on UDP %s (public IP: %s)", udpAddr, cfg.PublicIP)
 
 	// TLS listener (TURNS) — optional
 	tlsOn := false
@@ -122,7 +122,7 @@ func Start(cfg Config) (*Server, error) {
 			},
 		}
 		tlsOn = true
-		log.Printf("TURNS server listening on TLS %s", tlsAddr)
+		logger.Info("TURNS server listening on TLS %s", tlsAddr)
 	}
 
 	srv, err := pionTurn.NewServer(serverCfg)

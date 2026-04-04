@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/foxzi/vocala/internal/logger"
 	"net"
 	"strings"
 	"sync"
@@ -62,31 +62,31 @@ var (
 
 func SetNATIP(ip string) {
 	natIP = ip
-	log.Printf("webrtc: NAT 1:1 IP set to %s", ip)
+	logger.Info("webrtc: NAT 1:1 IP set to %s", ip)
 }
 
 // SetUDPPortRange sets the ephemeral UDP port range for WebRTC.
 func SetUDPPortRange(min, max uint16) {
 	udpPortMin = min
 	udpPortMax = max
-	log.Printf("webrtc: UDP port range set to %d-%d", min, max)
+	logger.Info("webrtc: UDP port range set to %d-%d", min, max)
 }
 
 func getAPI() *webrtc.API {
 	apiOnce.Do(func() {
 		m := &webrtc.MediaEngine{}
 		if err := m.RegisterDefaultCodecs(); err != nil {
-			log.Fatal("webrtc: failed to register codecs:", err)
+			logger.Fatal("webrtc: failed to register codecs:", err)
 		}
 
 		i := &interceptor.Registry{}
 		if err := webrtc.RegisterDefaultInterceptors(m, i); err != nil {
-			log.Fatal("webrtc: failed to register interceptors:", err)
+			logger.Fatal("webrtc: failed to register interceptors:", err)
 		}
 
 		pliFactory, err := intervalpli.NewReceiverInterceptor()
 		if err != nil {
-			log.Fatal("webrtc: failed to create PLI interceptor:", err)
+			logger.Fatal("webrtc: failed to create PLI interceptor:", err)
 		}
 		i.Add(pliFactory)
 
@@ -104,9 +104,9 @@ func getAPI() *webrtc.API {
 		if tcpErr == nil {
 			tcpMux := webrtc.NewICETCPMux(nil, tcpListener, 8)
 			s.SetICETCPMux(tcpMux)
-			log.Printf("webrtc: ICE TCP mux listening on port 40201")
+			logger.Debug("webrtc: ICE TCP mux listening on port 40201")
 		} else {
-			log.Printf("webrtc: failed to start ICE TCP mux: %v", tcpErr)
+			logger.Error("webrtc: failed to start ICE TCP mux: %v", tcpErr)
 		}
 		if natIP != "" {
 			s.SetNAT1To1IPs([]string{natIP}, webrtc.ICECandidateTypeHost)
@@ -247,7 +247,7 @@ func (s *SFU) HandleOffer(userID int64, username string, offerSDP string) error 
 
 	var addExistingOnce sync.Once
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
-		log.Printf("webrtc: peer %d (%s) connection state: %s", userID, username, state.String())
+		logger.Debug("webrtc: peer %d connection state: %s", userID, state.String())
 		if state == webrtc.PeerConnectionStateConnected {
 			addExistingOnce.Do(func() { go s.addExistingTracksForPeer(peer, userID) })
 		}
@@ -308,14 +308,14 @@ func (s *SFU) addExistingTracksForPeer(peer *Peer, userID int64) {
 		}
 		if ep.audioTrack != nil {
 			if err := s.addOutputTrack(peer, srcID, ep.audioTrack, "audio"); err != nil {
-				log.Printf("webrtc: failed to add existing audio %d->%d: %v", srcID, userID, err)
+				logger.Error("webrtc: failed to add existing audio %d->%d: %v", srcID, userID, err)
 			} else {
 				needsRenego = true
 			}
 		}
 		if ep.screenTrack != nil {
 			if err := s.addOutputTrack(peer, srcID, ep.screenTrack, "screen"); err != nil {
-				log.Printf("webrtc: failed to add existing screen %d->%d: %v", srcID, userID, err)
+				logger.Error("webrtc: failed to add existing screen %d->%d: %v", srcID, userID, err)
 			} else {
 				needsRenego = true
 				s.sendPLI(ep, ep.screenTrack)
@@ -323,7 +323,7 @@ func (s *SFU) addExistingTracksForPeer(peer *Peer, userID int64) {
 		}
 		if ep.cameraTrack != nil {
 			if err := s.addOutputTrack(peer, srcID, ep.cameraTrack, "camera"); err != nil {
-				log.Printf("webrtc: failed to add existing camera %d->%d: %v", srcID, userID, err)
+				logger.Error("webrtc: failed to add existing camera %d->%d: %v", srcID, userID, err)
 			} else {
 				needsRenego = true
 				s.sendPLI(ep, ep.cameraTrack)
@@ -404,13 +404,13 @@ func (s *SFU) RemovePeer(userID int64) {
 	if peer.PC.ConnectionState() != webrtc.PeerConnectionStateClosed {
 		peer.PC.Close()
 	}
-	log.Printf("webrtc: removed peer %d (%s)", userID, peer.Username)
+	logger.Debug("webrtc: removed peer %d", userID)
 }
 
 // --- Track handlers ---
 
 func (s *SFU) handleAudioTrack(peer *Peer, userID int64, username string, track *webrtc.TrackRemote) {
-	log.Printf("webrtc: received audio track from user %d (%s)", userID, username)
+	logger.Info("webrtc: audio track from user %d", userID)
 	s.mu.Lock()
 	peer.audioTrack = track
 	s.mu.Unlock()
@@ -421,7 +421,7 @@ func (s *SFU) handleAudioTrack(peer *Peer, userID int64, username string, track 
 			continue
 		}
 		if err := s.addOutputTrack(op, userID, track, "audio"); err != nil {
-			log.Printf("webrtc: failed to add audio %d->%d: %v", userID, otherID, err)
+			logger.Error("webrtc: failed to add audio %d->%d: %v", userID, otherID, err)
 		} else {
 			s.renegotiate(op)
 		}
@@ -432,7 +432,7 @@ func (s *SFU) handleAudioTrack(peer *Peer, userID int64, username string, track 
 }
 
 func (s *SFU) handleScreenTrack(peer *Peer, userID int64, username string, track *webrtc.TrackRemote) {
-	log.Printf("webrtc: received screen track from user %d (%s)", userID, username)
+	logger.Info("webrtc: screen track from user %d", userID)
 	s.mu.Lock()
 	peer.screenTrack = track
 	s.mu.Unlock()
@@ -443,7 +443,7 @@ func (s *SFU) handleScreenTrack(peer *Peer, userID int64, username string, track
 			continue
 		}
 		if err := s.addOutputTrack(op, userID, track, "screen"); err != nil {
-			log.Printf("webrtc: failed to add screen %d->%d: %v", userID, otherID, err)
+			logger.Error("webrtc: failed to add screen %d->%d: %v", userID, otherID, err)
 		} else {
 			s.renegotiate(op)
 		}
@@ -454,7 +454,7 @@ func (s *SFU) handleScreenTrack(peer *Peer, userID int64, username string, track
 	s.forwardRTP(track, userID, "screen", 4096)
 
 	// Track ended — cleanup
-	log.Printf("webrtc: screen track ended for user %d (%s)", userID, username)
+	logger.Info("webrtc: screen track ended for user %d", userID)
 	s.mu.Lock()
 	peer.screenTrack = nil
 	for _, op := range s.peers {
@@ -467,7 +467,7 @@ func (s *SFU) handleScreenTrack(peer *Peer, userID int64, username string, track
 }
 
 func (s *SFU) handleCameraTrack(peer *Peer, userID int64, username string, track *webrtc.TrackRemote) {
-	log.Printf("webrtc: received camera track from user %d (%s)", userID, username)
+	logger.Info("webrtc: camera track from user %d", userID)
 	s.mu.Lock()
 	peer.cameraTrack = track
 	s.mu.Unlock()
@@ -478,7 +478,7 @@ func (s *SFU) handleCameraTrack(peer *Peer, userID int64, username string, track
 			continue
 		}
 		if err := s.addOutputTrack(op, userID, track, "camera"); err != nil {
-			log.Printf("webrtc: failed to add camera %d->%d: %v", userID, otherID, err)
+			logger.Error("webrtc: failed to add camera %d->%d: %v", userID, otherID, err)
 		} else {
 			s.renegotiate(op)
 		}
@@ -489,7 +489,7 @@ func (s *SFU) handleCameraTrack(peer *Peer, userID int64, username string, track
 	s.forwardRTP(track, userID, "camera", 4096)
 
 	// Track ended — cleanup
-	log.Printf("webrtc: camera track ended for user %d (%s)", userID, username)
+	logger.Info("webrtc: camera track ended for user %d", userID)
 	s.mu.Lock()
 	peer.cameraTrack = nil
 	for _, op := range s.peers {
@@ -508,7 +508,7 @@ func (s *SFU) forwardRTP(track *webrtc.TrackRemote, userID int64, kind string, b
 	for {
 		n, _, err := track.Read(buf)
 		if err != nil {
-			log.Printf("webrtc: %s track read ended for user %d: %v", kind, userID, err)
+			logger.Info("webrtc: %s track read ended for user %d: %v", kind, userID, err)
 			return
 		}
 		s.mu.RLock()
@@ -528,7 +528,7 @@ func (s *SFU) forwardRTP(track *webrtc.TrackRemote, userID int64, kind string, b
 			}
 			if lt != nil {
 				if _, writeErr := lt.Write(buf[:n]); writeErr != nil {
-					log.Printf("webrtc: %s write to user %d failed: %v", kind, otherID, writeErr)
+					logger.Info("webrtc: %s write to user %d failed: %v", kind, otherID, writeErr)
 				}
 			}
 			op.mu.Unlock()
@@ -550,19 +550,19 @@ func (s *SFU) addOutputTrack(destPeer *Peer, srcUserID int64, srcTrack *webrtc.T
 	case "camera":
 		if _, exists := destPeer.cameraOutputTracks[srcUserID]; exists {
 			destPeer.mu.Unlock()
-			log.Printf("webrtc: skipping duplicate %s output track %d->%d", kind, srcUserID, destPeer.UserID)
+			logger.Debug("webrtc: skipping duplicate %s output track %d->%d", kind, srcUserID, destPeer.UserID)
 			return nil
 		}
 	case "screen":
 		if _, exists := destPeer.screenOutputTracks[srcUserID]; exists {
 			destPeer.mu.Unlock()
-			log.Printf("webrtc: skipping duplicate %s output track %d->%d", kind, srcUserID, destPeer.UserID)
+			logger.Debug("webrtc: skipping duplicate %s output track %d->%d", kind, srcUserID, destPeer.UserID)
 			return nil
 		}
 	case "audio":
 		if _, exists := destPeer.outputTracks[srcUserID]; exists {
 			destPeer.mu.Unlock()
-			log.Printf("webrtc: skipping duplicate %s output track %d->%d", kind, srcUserID, destPeer.UserID)
+			logger.Debug("webrtc: skipping duplicate %s output track %d->%d", kind, srcUserID, destPeer.UserID)
 			return nil
 		}
 	}
@@ -613,7 +613,7 @@ func (s *SFU) sendPLI(peer *Peer, track *webrtc.TrackRemote) {
 	if err := peer.PC.WriteRTCP([]rtcp.Packet{
 		&rtcp.PictureLossIndication{MediaSSRC: uint32(track.SSRC())},
 	}); err != nil {
-		log.Printf("webrtc: failed to send PLI for user %d: %v", peer.UserID, err)
+		logger.Error("webrtc: failed to send PLI for user %d: %v", peer.UserID, err)
 	}
 }
 
@@ -663,28 +663,28 @@ func (s *SFU) doRenegotiate(peer *Peer) {
 			break
 		}
 		if attempts == 0 {
-			log.Printf("webrtc: waiting for stable signaling state for user %d (current: %s)", peer.UserID, peer.PC.SignalingState())
+			logger.Debug("webrtc: waiting for stable signaling state for user %d (current: %s)", peer.UserID, peer.PC.SignalingState())
 		}
 		peer.negoMu.Unlock()
 		time.Sleep(100 * time.Millisecond)
 		peer.negoMu.Lock()
 	}
 	if peer.PC.SignalingState() != webrtc.SignalingStateStable {
-		log.Printf("webrtc: renegotiation timeout for user %d, signaling state: %s", peer.UserID, peer.PC.SignalingState())
+		logger.Debug("webrtc: renegotiation timeout for user %d, signaling state: %s", peer.UserID, peer.PC.SignalingState())
 		return
 	}
 
 	offer, err := peer.PC.CreateOffer(nil)
 	if err != nil {
-		log.Printf("webrtc: renegotiate offer failed for user %d: %v", peer.UserID, err)
+		logger.Debug("webrtc: renegotiate offer failed for user %d: %v", peer.UserID, err)
 		return
 	}
 	if err := peer.PC.SetLocalDescription(offer); err != nil {
-		log.Printf("webrtc: renegotiate setlocal failed for user %d: %v", peer.UserID, err)
+		logger.Debug("webrtc: renegotiate setlocal failed for user %d: %v", peer.UserID, err)
 		return
 	}
 
-	log.Printf("webrtc: sending renegotiation offer to user %d", peer.UserID)
+	logger.Debug("webrtc: sending renegotiation offer to user %d", peer.UserID)
 	data, _ := json.Marshal(map[string]any{
 		"type":    "webrtc_offer",
 		"payload": map[string]any{"sdp": offer.SDP},
@@ -703,7 +703,7 @@ func (s *SFU) HandleAnswer(userID int64, answerSDP string) error {
 	peer.negoMu.Lock()
 	defer peer.negoMu.Unlock()
 
-	log.Printf("webrtc: received answer from user %d, signaling state: %s", userID, peer.PC.SignalingState())
+	logger.Debug("webrtc: received answer from user %d, signaling state: %s", userID, peer.PC.SignalingState())
 	return peer.PC.SetRemoteDescription(webrtc.SessionDescription{
 		Type: webrtc.SDPTypeAnswer,
 		SDP:  answerSDP,

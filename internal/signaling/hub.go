@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"log"
+	"github.com/foxzi/vocala/internal/logger"
 	"net/http"
 	"sync"
 	"time"
@@ -137,7 +137,7 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("websocket upgrade error:", err)
+		logger.Info("websocket upgrade error:", err)
 		return
 	}
 
@@ -340,7 +340,7 @@ func handleMessage(c *Client, msg Message) {
 			SDP string `json:"sdp"`
 		}
 		if err := json.Unmarshal(msg.Payload, &p); err != nil {
-			log.Printf("signaling: bad webrtc_offer from user %d: %v", c.UserID, err)
+			logger.Warn("signaling: bad webrtc_offer from user %d: %v", c.UserID, err)
 			return
 		}
 		chID := channel.GetUserChannel(c.UserID)
@@ -351,7 +351,7 @@ func handleMessage(c *Client, msg Message) {
 			GlobalHub.SendTo(userID, data)
 		})
 		if err := sfu.HandleOffer(c.UserID, c.Username, p.SDP); err != nil {
-			log.Printf("signaling: webrtc offer failed for user %d: %v", c.UserID, err)
+			logger.Error("signaling: webrtc offer failed for user %d: %v", c.UserID, err)
 		}
 		// Clear preview if the renegotiation removed the video track
 		if !rtc.SDPHasVideoSending(p.SDP) {
@@ -373,7 +373,7 @@ func handleMessage(c *Client, msg Message) {
 			GlobalHub.SendTo(userID, data)
 		})
 		if err := sfu.HandleAnswer(c.UserID, p.SDP); err != nil {
-			log.Printf("signaling: webrtc answer failed for user %d: %v", c.UserID, err)
+			logger.Error("signaling: webrtc answer failed for user %d: %v", c.UserID, err)
 		}
 
 	case "camera_on":
@@ -398,7 +398,7 @@ func handleMessage(c *Client, msg Message) {
 
 	case "ws_media_mode":
 		c.IsWSMedia = true
-		log.Printf("signaling: user %d (%s) switched to WS media transport", c.UserID, c.Username)
+		logger.Debug("signaling: user %d switched to WS media transport", c.UserID)
 
 	case "chat_message":
 		var p struct {
@@ -430,7 +430,7 @@ func handleMessage(c *Client, msg Message) {
 			Text:      text,
 			CreatedAt: ts,
 		}); err != nil {
-			log.Printf("signaling: failed to save chat message: %v", err)
+			logger.Error("signaling: failed to save chat message: %v", err)
 		}
 
 		chatMsg, _ := json.Marshal(map[string]any{
@@ -525,7 +525,7 @@ func handleMessage(c *Client, msg Message) {
 			GlobalHub.SendTo(userID, data)
 		})
 		if err := sfu.HandleICECandidate(c.UserID, p.Candidate); err != nil {
-			log.Printf("signaling: ice candidate failed for user %d: %v", c.UserID, err)
+			logger.Warn("signaling: ice candidate failed for user %d: %v", c.UserID, err)
 		}
 	}
 }
