@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"html/template"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -27,6 +28,7 @@ import (
 	"github.com/foxzi/vocala/internal/signaling"
 	embeddedTurn "github.com/foxzi/vocala/internal/turn"
 	rtc "github.com/foxzi/vocala/internal/webrtc"
+	"golang.org/x/term"
 	"golang.org/x/time/rate"
 )
 
@@ -63,20 +65,28 @@ func loadTemplates() map[string]*template.Template {
 
 // --- Rate limiter (#6) ---
 
+type limiterEntry struct {
+	lim      *rate.Limiter
+	lastSeen time.Time
+}
+
 type ipLimiter struct {
 	mu       sync.Mutex
-	limiters map[string]*rate.Limiter
+	limiters map[string]*limiterEntry
 }
 
 func newIPLimiter() *ipLimiter {
-	return &ipLimiter{limiters: make(map[string]*rate.Limiter)}
+	l := &ipLimiter{limiters: make(map[string]*limiterEntry)}
+	go l.cleanup()
+	return l
 }
 
 func (l *ipLimiter) get(ip string) *rate.Limiter {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if lim, ok := l.limiters[ip]; ok {
-		return lim
+	if e, ok := l.limiters[ip]; ok {
+		e.lastSeen = time.Now()
+		return e.lim
 	}
 	rps := 10
 	burst := 20
@@ -85,18 +95,44 @@ func (l *ipLimiter) get(ip string) *rate.Limiter {
 		burst = cfg.Auth.RateLimitBurst
 	}
 	lim := rate.NewLimiter(rate.Limit(rps), burst)
-	l.limiters[ip] = lim
+	l.limiters[ip] = &limiterEntry{lim: lim, lastSeen: time.Now()}
 	return lim
+}
+
+func (l *ipLimiter) cleanup() {
+	for {
+		time.Sleep(10 * time.Minute)
+		l.mu.Lock()
+		cutoff := time.Now().Add(-30 * time.Minute)
+		for ip, e := range l.limiters {
+			if e.lastSeen.Before(cutoff) {
+				delete(l.limiters, ip)
+			}
+		}
+		l.mu.Unlock()
+	}
 }
 
 var limiter = newIPLimiter()
 
+func clientIP(r *http.Request) string {
+	// Only trust X-Forwarded-For when behind reverse proxy (RemoteAddr is loopback)
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		host, _, _ := net.SplitHostPort(r.RemoteAddr)
+		if host == "127.0.0.1" || host == "::1" {
+			// Use first IP from X-Forwarded-For (set by trusted proxy)
+			if idx := strings.Index(fwd, ","); idx > 0 {
+				return strings.TrimSpace(fwd[:idx])
+			}
+			return strings.TrimSpace(fwd)
+		}
+	}
+	return r.RemoteAddr
+}
+
 func rateLimitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := r.RemoteAddr
-		if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-			ip = fwd
-		}
+		ip := clientIP(r)
 		if !limiter.get(ip).Allow() {
 			http.Error(w, "too many requests", http.StatusTooManyRequests)
 			return
@@ -144,11 +180,13 @@ func setCSRFCookie(w http.ResponseWriter, r *http.Request) string {
 		return c.Value
 	}
 	token := generateCSRFToken()
+	secure := cfg != nil && cfg.Auth.CookieSecure
 	http.SetCookie(w, &http.Cookie{
 		Name:     "csrf_token",
 		Value:    token,
 		Path:     "/",
 		HttpOnly: false, // JS needs to read it for HTMX
+		Secure:   secure,
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   86400,
 	})
@@ -175,14 +213,32 @@ func sessionCookie(token string, maxAge int) *http.Cookie {
 
 // --- Main ---
 
+func readPasswordStdin() ([]byte, error) {
+	return term.ReadPassword(int(os.Stdin.Fd()))
+}
+
 func runCLI(args []string) {
 	switch args[0] {
 	case "user-add":
-		if len(args) < 3 {
-			fmt.Println("Usage: vocala user-add USERNAME PASSWORD [--admin] [--active]")
+		if len(args) < 2 {
+			fmt.Println("Usage: vocala user-add USERNAME [PASSWORD] [--admin] [--active]")
+			fmt.Println("If PASSWORD is omitted, it will be read from stdin.")
 			os.Exit(1)
 		}
-		username, password := args[1], args[2]
+		username := args[1]
+		password := ""
+		if len(args) >= 3 && !strings.HasPrefix(args[2], "--") {
+			password = args[2]
+		} else {
+			fmt.Print("Password: ")
+			pwBytes, err := readPasswordStdin()
+			if err != nil {
+				fmt.Printf("Failed to read password: %v\n", err)
+				os.Exit(1)
+			}
+			password = string(pwBytes)
+			fmt.Println()
+		}
 		if len(password) < cfg.Auth.MinPassword {
 			fmt.Printf("Password must be at least %d characters\n", cfg.Auth.MinPassword)
 			os.Exit(1)
@@ -263,8 +319,9 @@ func runCLI(args []string) {
 		}
 
 	case "user-password":
-		if len(args) < 3 {
-			fmt.Println("Usage: vocala user-password USERNAME NEWPASSWORD")
+		if len(args) < 2 {
+			fmt.Println("Usage: vocala user-password USERNAME [NEWPASSWORD]")
+			fmt.Println("If NEWPASSWORD is omitted, it will be read from stdin.")
 			os.Exit(1)
 		}
 		u, err := auth.GetUserByUsername(args[1])
@@ -272,11 +329,24 @@ func runCLI(args []string) {
 			fmt.Printf("User not found: %s\n", args[1])
 			os.Exit(1)
 		}
-		if len(args[2]) < cfg.Auth.MinPassword {
+		newPass := ""
+		if len(args) >= 3 {
+			newPass = args[2]
+		} else {
+			fmt.Print("New password: ")
+			pwBytes, err := readPasswordStdin()
+			if err != nil {
+				fmt.Printf("Failed to read password: %v\n", err)
+				os.Exit(1)
+			}
+			newPass = string(pwBytes)
+			fmt.Println()
+		}
+		if len(newPass) < cfg.Auth.MinPassword {
 			fmt.Printf("Password must be at least %d characters\n", cfg.Auth.MinPassword)
 			os.Exit(1)
 		}
-		if err := auth.SetUserPassword(u.ID, args[2]); err != nil {
+		if err := auth.SetUserPassword(u.ID, newPass); err != nil {
 			fmt.Printf("Failed to reset password: %v\n", err)
 			os.Exit(1)
 		}

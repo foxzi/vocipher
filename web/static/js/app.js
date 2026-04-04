@@ -1394,6 +1394,17 @@ function isInputFocused() {
 
 // ─── Init ─────────────────────────────────────────────────────
 
+// Delegated click handlers for data-action buttons (XSS-safe, no inline onclick)
+document.addEventListener('click', function(e) {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    const chId = +btn.dataset.chId;
+    const chName = btn.dataset.chName;
+    if (action === 'manage-members') openMemberManager(chId, chName);
+    if (action === 'delete-channel') deleteChannel(chId, chName);
+});
+
 // Set self avatar
 const selfAvatar = document.getElementById('self-avatar');
 if (selfAvatar && selfAvatar.dataset.username) {

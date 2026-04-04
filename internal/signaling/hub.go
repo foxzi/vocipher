@@ -14,6 +14,7 @@ import (
 	"github.com/foxzi/vocala/internal/database"
 	rtc "github.com/foxzi/vocala/internal/webrtc"
 	"github.com/gorilla/websocket"
+	"golang.org/x/time/rate"
 )
 
 // Maximum WebSocket message size (default 512 KB)
@@ -191,11 +192,16 @@ func (c *Client) readPump() {
 	}()
 
 	c.Conn.SetReadLimit(maxMessageSize)
+	wsLimiter := rate.NewLimiter(30, 60) // 30 msg/s, burst 60
 
 	for {
 		msgType, raw, err := c.Conn.ReadMessage()
 		if err != nil {
 			return
+		}
+
+		if !wsLimiter.Allow() {
+			continue // drop message silently
 		}
 
 		if msgType == websocket.BinaryMessage {
@@ -469,6 +475,10 @@ func handleMessage(c *Client, msg Message) {
 			Image string `json:"image"`
 		}
 		if err := json.Unmarshal(msg.Payload, &p); err != nil || p.Image == "" {
+			return
+		}
+		// Limit preview size to 100KB to prevent memory abuse
+		if len(p.Image) > 100*1024 {
 			return
 		}
 		chID := channel.GetUserChannel(c.UserID)

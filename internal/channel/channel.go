@@ -3,12 +3,16 @@ package channel
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"regexp"
 	"sync"
 	"time"
 
 	"github.com/foxzi/vocala/internal/database"
 )
+
+var validChannelName = regexp.MustCompile(`^[a-zA-Z0-9_\-. ]{1,50}$`)
 
 type Channel struct {
 	ID        int64
@@ -31,7 +35,17 @@ var (
 	userToChannel = make(map[int64]int64)                    // userID -> channelID
 )
 
+func ValidateName(name string) error {
+	if !validChannelName.MatchString(name) {
+		return errors.New("channel name must be 1-50 chars: letters, digits, _ - . or spaces")
+	}
+	return nil
+}
+
 func Create(name string, createdBy int64, isPrivate bool) (*Channel, error) {
+	if err := ValidateName(name); err != nil {
+		return nil, err
+	}
 	res, err := database.DB.Exec(
 		"INSERT INTO channels (name, created_by, is_private) VALUES (?, ?, ?)",
 		name, createdBy, isPrivate,

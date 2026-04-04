@@ -5,11 +5,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/foxzi/vocala/internal/database"
 	"golang.org/x/crypto/bcrypt"
 )
+
+var validUsername = regexp.MustCompile(`^[a-zA-Z0-9_.\- ]{2,30}$`)
 
 type User struct {
 	ID        int64
@@ -25,7 +28,17 @@ var (
 	ErrNotActive   = errors.New("account is not activated")
 )
 
+func ValidateUsername(username string) error {
+	if !validUsername.MatchString(username) {
+		return errors.New("username must be 2-30 chars: letters, digits, _ . - or spaces")
+	}
+	return nil
+}
+
 func Register(username, password string) (*User, error) {
+	if err := ValidateUsername(username); err != nil {
+		return nil, err
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err

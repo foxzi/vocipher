@@ -159,7 +159,7 @@
                                         Password
                                     </button>
 
-                                    <form method="POST" action="/admin/users/delete" class="inline" onsubmit="return confirm('Delete user {{.Username}}?')">
+                                    <form method="POST" action="/admin/users/delete" class="inline" data-confirm-delete="{{.Username}}">
                                         <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
                                         <input type="hidden" name="user_id" value="{{.ID}}">
                                         <button type="submit" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-vc-red/20 text-vc-red hover:bg-vc-red/30 transition" title="Delete user">
@@ -208,6 +208,11 @@ function avatarURL(username) {
 // Set all admin avatars
 document.querySelectorAll('.admin-avatar').forEach(el => {
     el.src = avatarURL(el.dataset.username);
+});
+document.querySelectorAll('[data-confirm-delete]').forEach(form => {
+    form.addEventListener('submit', function(e) {
+        if (!confirm('Delete user ' + this.dataset.confirmDelete + '?')) e.preventDefault();
+    });
 });
 function showResetPassword(userId, username) {
     document.getElementById('reset-password-user-id').value = userId;
