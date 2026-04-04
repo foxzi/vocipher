@@ -21,8 +21,15 @@ if [ ! -f /etc/vocipher/config.yaml ]; then
     chmod 640 /etc/vocipher/config.yaml
 fi
 
-# Enable and start service
+# Enable service
 systemctl daemon-reload
 systemctl enable vocipher.service
-echo "Vocipher installed. Edit /etc/vocipher/config.yaml then run:"
-echo "  systemctl start vocipher"
+
+# Restart if already running (upgrade), otherwise just print instructions
+if systemctl is-active --quiet vocipher.service 2>/dev/null || systemctl is-enabled --quiet vocipher.service 2>/dev/null; then
+    systemctl restart vocipher.service
+    echo "Vocipher updated and restarted."
+else
+    echo "Vocipher installed. Edit /etc/vocipher/config.yaml then run:"
+    echo "  systemctl start vocipher"
+fi
