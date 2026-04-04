@@ -1,11 +1,11 @@
-# Vocipher configuration
+# Vocala configuration
 # See config.yaml.example for all available options.
 
 server:
   addr: ":8090"
 
 database:
-  path: "/var/lib/vocipher/vocipher.db"
+  path: "/var/lib/vocala/vocala.db"
 
 webrtc:
   nat_ip: ""

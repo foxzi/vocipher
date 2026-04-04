@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/foxzi/vocala/internal/auth"
+	"github.com/foxzi/vocala/internal/channel"
+	"github.com/foxzi/vocala/internal/database"
+	rtc "github.com/foxzi/vocala/internal/webrtc"
 	"github.com/gorilla/websocket"
-	"github.com/kidandcat/vocipher/internal/auth"
-	"github.com/kidandcat/vocipher/internal/channel"
-	"github.com/kidandcat/vocipher/internal/database"
-	rtc "github.com/kidandcat/vocipher/internal/webrtc"
 )
 
 // Maximum WebSocket message size (default 512 KB)

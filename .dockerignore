@@ -2,7 +2,7 @@
 *.db
 *.db-wal
 *.db-shm
-vocipher
+vocala
 server
 docs/
 CLAUDE.md

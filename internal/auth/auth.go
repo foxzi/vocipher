@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/kidandcat/vocipher/internal/database"
+	"github.com/foxzi/vocala/internal/database"
 	"golang.org/x/crypto/bcrypt"
 )
 

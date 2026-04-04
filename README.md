@@ -1,6 +1,6 @@
-# Vocipher (Fork)
+# Vocala (Fork)
 
-> This is a fork of [kidandcat/vocipher](https://github.com/kidandcat/vocipher) -- a self-hosted voice chat server.
+> This is a fork of [kidandcat/vocala](https://github.com/kidandcat/vocala) -- a self-hosted voice chat server.
 > The original project provides a lightweight, single-binary alternative to Discord focused on voice communication.
 > This fork adds security hardening, admin panel, embedded TURN server, Docker + Nginx HTTPS support, mobile layout and documentation.
 
@@ -34,13 +34,13 @@
 - **Built-in TURN** using [Pion TURN](https://github.com/pion/turn), runs in the same process
 - **Auto-generated credentials** -- Random secret generated at startup, no manual configuration
 - **Server-to-client config** -- ICE servers (STUN + TURN) injected into the page via template
-- Activated by setting `VOCIPHER_TURN_IP` environment variable
+- Activated by setting `VOCALA_TURN_IP` environment variable
 
 ### WebRTC Improvements
 
 - **Interceptor registry** -- Proper RTP extension handling for Chrome simulcast support
 - **Automatic PLI** -- Periodic keyframe requests via `intervalpli` interceptor for reliable video
-- **NAT 1:1 mapping** -- `VOCIPHER_NAT_IP` for Docker deployments (ICE candidates advertise host IP)
+- **NAT 1:1 mapping** -- `VOCALA_NAT_IP` for Docker deployments (ICE candidates advertise host IP)
 - **Serialized renegotiation** -- Per-peer mutex prevents concurrent offer/answer conflicts
 - **Screen share fixes** -- Video container survives renegotiation, stream updated in place
 
@@ -55,7 +55,7 @@
 
 - **Docker + Nginx HTTPS** -- Multi-stage Dockerfile, Nginx reverse proxy with self-signed certificate
 - **Self-signed cert generator** -- `nginx/generate-cert.sh` auto-detects local IP for SAN
-- **`.env` configuration** -- `VOCIPHER_NAT_IP` via `.env` file for Docker deployments
+- **`.env` configuration** -- `VOCALA_NAT_IP` via `.env` file for Docker deployments
 - **UDP port range** -- Ports 50000-50100 exposed for WebRTC media in Docker
 - **Graceful shutdown** -- Signal handling (SIGINT/SIGTERM) with 10-second timeout
 - **Server timeouts** -- Read (15s), Write (30s), Idle (120s) on HTTP server
@@ -93,24 +93,24 @@
 ### Binary
 
 ```bash
-git clone https://github.com/foxzi/vocipher.git
-cd vocipher
+git clone https://github.com/foxzi/vocala.git
+cd vocala
 make build
-./vocipher
+./vocala
 ```
 
 ### Docker with HTTPS
 
 ```bash
-git clone https://github.com/foxzi/vocipher.git
-cd vocipher
+git clone https://github.com/foxzi/vocala.git
+cd vocala
 
 # Generate self-signed certificate
 ./nginx/generate-cert.sh ./nginx/certs
 
 # Configure host IP for WebRTC
 cp .env.example .env
-# Edit .env and set VOCIPHER_NAT_IP to your machine's IP
+# Edit .env and set VOCALA_NAT_IP to your machine's IP
 
 # Start
 docker compose up -d
@@ -122,10 +122,10 @@ Access at `https://<your-ip>`. The first registered user becomes the admin.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VOCIPHER_ADDR` | `:8090` | HTTP listen address |
-| `VOCIPHER_DB_PATH` | `vocipher.db` | Path to SQLite database file |
-| `VOCIPHER_TURN_IP` | *(disabled)* | Public IP for built-in TURN server |
-| `VOCIPHER_NAT_IP` | *(disabled)* | Host IP for WebRTC ICE candidates (required in Docker) |
+| `VOCALA_ADDR` | `:8090` | HTTP listen address |
+| `VOCALA_DB_PATH` | `vocala.db` | Path to SQLite database file |
+| `VOCALA_TURN_IP` | *(disabled)* | Public IP for built-in TURN server |
+| `VOCALA_NAT_IP` | *(disabled)* | Host IP for WebRTC ICE candidates (required in Docker) |
 
 See [docs/configuration.md](docs/configuration.md) for details.
 
@@ -164,4 +164,4 @@ MIT
 
 ## Credits
 
-Original project by [kidandcat](https://github.com/kidandcat/vocipher).
+Original project by [kidandcat](https://github.com/kidandcat/vocala).

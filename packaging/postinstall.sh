@@ -2,34 +2,34 @@
 set -e
 
 # Create user and group
-if ! getent group vocipher >/dev/null 2>&1; then
-    groupadd --system vocipher
+if ! getent group vocala >/dev/null 2>&1; then
+    groupadd --system vocala
 fi
-if ! getent passwd vocipher >/dev/null 2>&1; then
-    useradd --system --gid vocipher --home-dir /var/lib/vocipher --shell /usr/sbin/nologin vocipher
+if ! getent passwd vocala >/dev/null 2>&1; then
+    useradd --system --gid vocala --home-dir /var/lib/vocala --shell /usr/sbin/nologin vocala
 fi
 
 # Create data directory
-mkdir -p /var/lib/vocipher
-chown vocipher:vocipher /var/lib/vocipher
-chmod 750 /var/lib/vocipher
+mkdir -p /var/lib/vocala
+chown vocala:vocala /var/lib/vocala
+chmod 750 /var/lib/vocala
 
 # Install default config if not present
-if [ ! -f /etc/vocipher/config.yaml ]; then
-    cp /etc/vocipher/config.yaml.default /etc/vocipher/config.yaml
-    chown root:vocipher /etc/vocipher/config.yaml
-    chmod 640 /etc/vocipher/config.yaml
+if [ ! -f /etc/vocala/config.yaml ]; then
+    cp /etc/vocala/config.yaml.default /etc/vocala/config.yaml
+    chown root:vocala /etc/vocala/config.yaml
+    chmod 640 /etc/vocala/config.yaml
 fi
 
 # Enable service
 systemctl daemon-reload
-systemctl enable vocipher.service
+systemctl enable vocala.service
 
 # Restart if already running (upgrade), otherwise just print instructions
-if systemctl is-active --quiet vocipher.service 2>/dev/null || systemctl is-enabled --quiet vocipher.service 2>/dev/null; then
-    systemctl restart vocipher.service
-    echo "Vocipher updated and restarted."
+if systemctl is-active --quiet vocala.service 2>/dev/null || systemctl is-enabled --quiet vocala.service 2>/dev/null; then
+    systemctl restart vocala.service
+    echo "Vocala updated and restarted."
 else
-    echo "Vocipher installed. Edit /etc/vocipher/config.yaml then run:"
-    echo "  systemctl start vocipher"
+    echo "Vocala installed. Edit /etc/vocala/config.yaml then run:"
+    echo "  systemctl start vocala"
 fi

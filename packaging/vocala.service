@@ -1,13 +1,13 @@
 [Unit]
-Description=Vocipher Voice Chat Server
+Description=Vocala Voice Chat Server
 After=network.target
 
 [Service]
 Type=simple
-User=vocipher
-Group=vocipher
-ExecStart=/usr/bin/vocipher -config /etc/vocipher/config.yaml
-WorkingDirectory=/usr/share/vocipher
+User=vocala
+Group=vocala
+ExecStart=/usr/bin/vocala -config /etc/vocala/config.yaml
+WorkingDirectory=/usr/share/vocala
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65536
@@ -16,7 +16,7 @@ LimitNOFILE=65536
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/vocipher
+ReadWritePaths=/var/lib/vocala
 
 [Install]
 WantedBy=multi-user.target

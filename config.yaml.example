@@ -1,4 +1,4 @@
-# Vocipher configuration
+# Vocala configuration
 # Copy to config.yaml and adjust values as needed.
 # Environment variables override these settings.
 
@@ -9,7 +9,7 @@ server:
   idle_timeout: 120         # seconds
 
 database:
-  path: "vocipher.db"       # SQLite database file path
+  path: "vocala.db"         # SQLite database file path
 
 webrtc:
   nat_ip: ""                # Host IP for ICE candidates (required in Docker)

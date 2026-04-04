@@ -10,7 +10,7 @@ make run
 
 # Or build separately
 make build
-./vocipher
+./vocala
 ```
 
 Server starts at `http://localhost:8090`.
@@ -28,37 +28,37 @@ docker compose logs -f
 docker compose down
 ```
 
-The database is stored on a Docker named volume (`vocipher-data`), so data survives container restarts.
+The database is stored on a Docker named volume (`vocala-data`), so data survives container restarts.
 
 ### Docker with TURN
 
-Edit `docker-compose.yaml` and uncomment the `VOCIPHER_TURN_IP` line with your server's public IP:
+Edit `docker-compose.yaml` and uncomment the `VOCALA_TURN_IP` line with your server's public IP:
 
 ```yaml
 environment:
-  - VOCIPHER_DB_PATH=/app/data/vocipher.db
-  - VOCIPHER_ADDR=:8090
-  - VOCIPHER_TURN_IP=203.0.113.1  # your public IP
+  - VOCALA_DB_PATH=/app/data/vocala.db
+  - VOCALA_ADDR=:8090
+  - VOCALA_TURN_IP=203.0.113.1  # your public IP
 ```
 
 Make sure UDP port 3478 is open in your firewall.
 
 ### Production with Nginx + HTTPS
 
-For production, Nginx handles TLS termination and proxies to Vocipher.
+For production, Nginx handles TLS termination and proxies to Vocala.
 
 **Network diagram:**
 
 ```
 Internet
     │
-    ├── TCP 443 (HTTPS) ──> Nginx ──> Vocipher :8090
+    ├── TCP 443 (HTTPS) ──> Nginx ──> Vocala :8090
     ├── TCP 80  (HTTP)  ──> Nginx (redirect to HTTPS)
     │
-    └── UDP 3478 (TURN) ──> Vocipher TURN (direct, bypasses Nginx)
+    └── UDP 3478 (TURN) ──> Vocala TURN (direct, bypasses Nginx)
 ```
 
-**Important:** Nginx does NOT proxy TURN/UDP traffic. TURN works directly between clients and the Vocipher process.
+**Important:** Nginx does NOT proxy TURN/UDP traffic. TURN works directly between clients and the Vocala process.
 
 **Nginx configuration example:**
 
@@ -79,7 +79,7 @@ server {
     # Security headers
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
-    # Proxy to Vocipher
+    # Proxy to Vocala
     location / {
         proxy_pass http://127.0.0.1:8090;
         proxy_set_header Host $host;
@@ -118,15 +118,15 @@ sudo apt install certbot python3-certbot-nginx
 sudo certbot --nginx -d voice.example.com
 ```
 
-**Vocipher configuration for Nginx:**
+**Vocala configuration for Nginx:**
 
 ```bash
-VOCIPHER_ADDR=127.0.0.1:8090 \
-VOCIPHER_TURN_IP=203.0.113.1 \
-./vocipher
+VOCALA_ADDR=127.0.0.1:8090 \
+VOCALA_TURN_IP=203.0.113.1 \
+./vocala
 ```
 
-Bind to `127.0.0.1` so Vocipher is only accessible through Nginx, not directly from the internet.
+Bind to `127.0.0.1` so Vocala is only accessible through Nginx, not directly from the internet.
 
 ### Firewall Rules
 
@@ -135,7 +135,7 @@ Bind to `127.0.0.1` so Vocipher is only accessible through Nginx, not directly f
 | 80 | TCP | HTTP (Nginx) | Public (redirects to HTTPS) |
 | 443 | TCP | HTTPS (Nginx) | Public |
 | 3478 | UDP | TURN | Public |
-| 8090 | TCP | Vocipher HTTP | Localhost only (behind Nginx) |
+| 8090 | TCP | Vocala HTTP | Localhost only (behind Nginx) |
 
 ```bash
 # UFW example
@@ -146,7 +146,7 @@ sudo ufw allow 3478/udp
 
 ### Docker Compose with Nginx (included)
 
-The default `docker-compose.yaml` includes both Vocipher and Nginx with HTTPS:
+The default `docker-compose.yaml` includes both Vocala and Nginx with HTTPS:
 
 ```bash
 # 1. Generate self-signed certificate
@@ -154,7 +154,7 @@ The default `docker-compose.yaml` includes both Vocipher and Nginx with HTTPS:
 
 # 2. Configure host IP
 cp .env.example .env
-# Edit .env: set VOCIPHER_NAT_IP=<your-host-ip>
+# Edit .env: set VOCALA_NAT_IP=<your-host-ip>
 
 # 3. Start
 docker compose up -d
@@ -162,13 +162,13 @@ docker compose up -d
 # Access at https://<your-host-ip>
 ```
 
-The `.env` file is required for WebRTC to work in Docker -- without `VOCIPHER_NAT_IP`, ICE candidates will advertise the container's internal IP and peers won't be able to connect.
+The `.env` file is required for WebRTC to work in Docker -- without `VOCALA_NAT_IP`, ICE candidates will advertise the container's internal IP and peers won't be able to connect.
 
 ### Ports Summary
 
 | Component | Default Port | Protocol | Configurable |
 |-----------|-------------|----------|--------------|
-| HTTP server | 8090 | TCP | `VOCIPHER_ADDR` (internal) |
+| HTTP server | 8090 | TCP | `VOCALA_ADDR` (internal) |
 | Nginx HTTP | 80 | TCP | docker-compose.yaml |
 | Nginx HTTPS | 443 | TCP | docker-compose.yaml |
 | TURN server | 3478 | UDP | Not yet (hardcoded) |
@@ -176,7 +176,7 @@ The `.env` file is required for WebRTC to work in Docker -- without `VOCIPHER_NA
 
 ### Health Check
 
-Vocipher does not have a dedicated health endpoint. You can check the login page:
+Vocala does not have a dedicated health endpoint. You can check the login page:
 
 ```bash
 curl -o /dev/null -w "%{http_code}" http://localhost:8090/login
@@ -192,7 +192,7 @@ curl -o /dev/null -w "%{http_code}" http://localhost:8090/login
 ```bash
 make run    # Сборка и запуск
 make build  # Только сборка
-./vocipher  # Запуск
+./vocala  # Запуск
 ```
 
 Сервер стартует на `http://localhost:8090`.
@@ -209,36 +209,36 @@ docker compose down      # Остановка
 
 ### Docker с TURN
 
-В `docker-compose.yaml` раскомментируйте строку `VOCIPHER_TURN_IP`, указав публичный IP сервера. Убедитесь, что UDP порт 3478 открыт в файрволе.
+В `docker-compose.yaml` раскомментируйте строку `VOCALA_TURN_IP`, указав публичный IP сервера. Убедитесь, что UDP порт 3478 открыт в файрволе.
 
 ### Продакшен с Nginx + HTTPS
 
-В продакшене Nginx выполняет TLS-терминацию и проксирует трафик к Vocipher.
+В продакшене Nginx выполняет TLS-терминацию и проксирует трафик к Vocala.
 
 **Схема сети:**
 
 ```
 Интернет
     │
-    ├── TCP 443 (HTTPS) ──> Nginx ──> Vocipher :8090
+    ├── TCP 443 (HTTPS) ──> Nginx ──> Vocala :8090
     ├── TCP 80  (HTTP)  ──> Nginx (редирект на HTTPS)
     │
-    └── UDP 3478 (TURN) ──> Vocipher TURN (напрямую, минуя Nginx)
+    └── UDP 3478 (TURN) ──> Vocala TURN (напрямую, минуя Nginx)
 ```
 
-**Важно:** Nginx НЕ проксирует TURN/UDP трафик. TURN работает напрямую между клиентами и Vocipher.
+**Важно:** Nginx НЕ проксирует TURN/UDP трафик. TURN работает напрямую между клиентами и Vocala.
 
 Пример конфигурации Nginx и настройки Let's Encrypt см. в английской версии выше.
 
-**Конфигурация Vocipher за Nginx:**
+**Конфигурация Vocala за Nginx:**
 
 ```bash
-VOCIPHER_ADDR=127.0.0.1:8090 \
-VOCIPHER_TURN_IP=203.0.113.1 \
-./vocipher
+VOCALA_ADDR=127.0.0.1:8090 \
+VOCALA_TURN_IP=203.0.113.1 \
+./vocala
 ```
 
-Привязка к `127.0.0.1` делает Vocipher доступным только через Nginx.
+Привязка к `127.0.0.1` делает Vocala доступным только через Nginx.
 
 ### Правила файрвола
 
@@ -247,7 +247,7 @@ VOCIPHER_TURN_IP=203.0.113.1 \
 | 80 | TCP | HTTP (Nginx) | Публичный (редирект на HTTPS) |
 | 443 | TCP | HTTPS (Nginx) | Публичный |
 | 3478 | UDP | TURN | Публичный |
-| 8090 | TCP | Vocipher HTTP | Только localhost (за Nginx) |
+| 8090 | TCP | Vocala HTTP | Только localhost (за Nginx) |
 
 ### Проверка работоспособности
 

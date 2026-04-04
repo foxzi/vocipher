@@ -1,36 +1,36 @@
-name: vocipher
+name: vocala
 arch: amd64
 platform: linux
-version: v0.1.0
-maintainer: Vocipher <noreply@vocipher.com>
+version: v0.2.0
+maintainer: Vocala <noreply@vocala.dev>
 description: Self-hosted voice chat server with WebRTC SFU
-vendor: Vocipher
-homepage: https://github.com/foxzi/vocipher
+vendor: Vocala
+homepage: https://github.com/foxzi/vocala
 license: MIT
 
 contents:
   # Binary
-  - src: ./vocipher
-    dst: /usr/bin/vocipher
+  - src: ./vocala
+    dst: /usr/bin/vocala
     file_info:
       mode: 0755
 
   # Web assets
   - src: ./web/templates/
-    dst: /usr/share/vocipher/web/templates/
+    dst: /usr/share/vocala/web/templates/
   - src: ./web/static/js/
-    dst: /usr/share/vocipher/web/static/js/
+    dst: /usr/share/vocala/web/static/js/
 
   # Config
   - src: ./packaging/config.yaml.default
-    dst: /etc/vocipher/config.yaml.default
+    dst: /etc/vocala/config.yaml.default
     type: config
   - src: ./config.yaml.example
-    dst: /etc/vocipher/config.yaml.example
+    dst: /etc/vocala/config.yaml.example
 
   # Systemd
-  - src: ./packaging/vocipher.service
-    dst: /usr/lib/systemd/system/vocipher.service
+  - src: ./packaging/vocala.service
+    dst: /usr/lib/systemd/system/vocala.service
 
 scripts:
   postinstall: ./packaging/postinstall.sh

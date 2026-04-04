@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kidandcat/vocipher/internal/database"
+	"github.com/foxzi/vocala/internal/database"
 )
 
 type Channel struct {

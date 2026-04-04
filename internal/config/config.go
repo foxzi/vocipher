@@ -68,7 +68,7 @@ func Default() *Config {
 			IdleTimeout:  120,
 		},
 		Database: DatabaseConfig{
-			Path:              "vocipher.db",
+			Path:              "vocala.db",
 			ChatRetentionDays: 30,
 		},
 		WebRTC: WebRTCConfig{
@@ -116,25 +116,25 @@ func Load(path string) *Config {
 }
 
 func envOverrides(cfg *Config) {
-	if v := os.Getenv("VOCIPHER_ADDR"); v != "" {
+	if v := os.Getenv("VOCALA_ADDR"); v != "" {
 		cfg.Server.Addr = v
 	}
-	if v := os.Getenv("VOCIPHER_DB_PATH"); v != "" {
+	if v := os.Getenv("VOCALA_DB_PATH"); v != "" {
 		cfg.Database.Path = v
 	}
-	if v := os.Getenv("VOCIPHER_NAT_IP"); v != "" {
+	if v := os.Getenv("VOCALA_NAT_IP"); v != "" {
 		cfg.WebRTC.NATIP = v
 	}
-	if v := os.Getenv("VOCIPHER_TURN_IP"); v != "" {
+	if v := os.Getenv("VOCALA_TURN_IP"); v != "" {
 		cfg.TURN.Enabled = true
 		cfg.TURN.IP = v
 	}
-	if v := os.Getenv("VOCIPHER_TURN_PORT"); v != "" {
+	if v := os.Getenv("VOCALA_TURN_PORT"); v != "" {
 		if p, err := strconv.Atoi(v); err == nil {
 			cfg.TURN.Port = p
 		}
 	}
-	if v := os.Getenv("VOCIPHER_COOKIE_SECURE"); v == "true" || v == "1" {
+	if v := os.Getenv("VOCALA_COOKIE_SECURE"); v == "true" || v == "1" {
 		cfg.Auth.CookieSecure = true
 	}
 }

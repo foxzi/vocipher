@@ -4,12 +4,12 @@
 
 ### Overview
 
-Vocipher is a self-hosted voice chat server built as a single Go binary. It combines an HTTP server, WebSocket signaling, WebRTC SFU (Selective Forwarding Unit) and an optional embedded TURN server in one process.
+Vocala is a self-hosted voice chat server built as a single Go binary. It combines an HTTP server, WebSocket signaling, WebRTC SFU (Selective Forwarding Unit) and an optional embedded TURN server in one process.
 
 ### Project Structure
 
 ```
-vocipher/
+vocala/
 ├── cmd/server/main.go           # Entry point, HTTP routing, middleware
 ├── internal/
 │   ├── auth/auth.go             # User registration, login, sessions
@@ -33,7 +33,7 @@ vocipher/
 ### Request Flow
 
 ```
-Browser ──HTTPS──> Nginx ──HTTP──> Vocipher HTTP Server (:8090)
+Browser ──HTTPS──> Nginx ──HTTP──> Vocala HTTP Server (:8090)
    │                                    │
    ├── GET /login, /register            ├── Template rendering
    ├── GET / (requires auth)            ├── requireAuth middleware
@@ -45,7 +45,7 @@ Browser ──HTTPS──> Nginx ──HTTP──> Vocipher HTTP Server (:8090)
 
 ### WebRTC SFU Architecture
 
-Vocipher uses a Selective Forwarding Unit (SFU) model. Unlike peer-to-peer mesh (where each client sends media to every other client), the SFU receives media from each client and re-broadcasts it to all others. This is significantly more efficient for groups larger than 2-3 people.
+Vocala uses a Selective Forwarding Unit (SFU) model. Unlike peer-to-peer mesh (where each client sends media to every other client), the SFU receives media from each client and re-broadcasts it to all others. This is significantly more efficient for groups larger than 2-3 people.
 
 ```
 User A (audio) ──RTP──> SFU ──RTP──> User B (playback)
@@ -61,7 +61,7 @@ User B (audio) ──RTP──> SFU ──RTP──> User A (playback)
 - Interceptor registry for Chrome simulcast RTP extension support
 - Automatic PLI (Picture Loss Indication) via `intervalpli` interceptor
 - Serialized per-peer renegotiation with stable state waiting
-- NAT 1:1 IP mapping for Docker deployments (`VOCIPHER_NAT_IP`)
+- NAT 1:1 IP mapping for Docker deployments (`VOCALA_NAT_IP`)
 - Ephemeral UDP port range 50000-50100 for Docker port mapping
 
 ### WebSocket Signaling Protocol
@@ -207,7 +207,7 @@ Channels can be created as private (locked). All users see private channels in t
 
 ### TURN Server
 
-The embedded TURN server uses [pion/turn](https://github.com/pion/turn) and runs inside the same process. It is activated by setting the `VOCIPHER_TURN_IP` environment variable to the server's public IP address.
+The embedded TURN server uses [pion/turn](https://github.com/pion/turn) and runs inside the same process. It is activated by setting the `VOCALA_TURN_IP` environment variable to the server's public IP address.
 
 ```
 Client behind NAT
@@ -216,7 +216,7 @@ Client behind NAT
     │
     └── Fallback to TURN relay
             │
-            └── UDP :3478 ──> Vocipher TURN ──> Other peer
+            └── UDP :3478 ──> Vocala TURN ──> Other peer
 ```
 
 TURN credentials are generated automatically at startup and injected into the ICE configuration sent to clients via the HTML template.
@@ -238,12 +238,12 @@ TURN credentials are generated automatically at startup and injected into the IC
 
 ### Обзор
 
-Vocipher -- self-hosted голосовой чат-сервер, собранный в один бинарный файл Go. Объединяет HTTP-сервер, WebSocket-сигнализацию, WebRTC SFU и опциональный встроенный TURN-сервер в одном процессе.
+Vocala -- self-hosted голосовой чат-сервер, собранный в один бинарный файл Go. Объединяет HTTP-сервер, WebSocket-сигнализацию, WebRTC SFU и опциональный встроенный TURN-сервер в одном процессе.
 
 ### Структура проекта
 
 ```
-vocipher/
+vocala/
 ├── cmd/server/main.go           # Точка входа, HTTP роутинг, middleware
 ├── internal/
 │   ├── auth/auth.go             # Регистрация, логин, сессии
@@ -262,7 +262,7 @@ vocipher/
 
 ### Архитектура WebRTC SFU
 
-Vocipher использует модель SFU (Selective Forwarding Unit). В отличие от P2P mesh (где каждый клиент отправляет медиа каждому), SFU получает медиа от каждого клиента и переправляет остальным. Это значительно эффективнее для групп больше 2-3 человек.
+Vocala использует модель SFU (Selective Forwarding Unit). В отличие от P2P mesh (где каждый клиент отправляет медиа каждому), SFU получает медиа от каждого клиента и переправляет остальным. Это значительно эффективнее для групп больше 2-3 человек.
 
 **Ключевые свойства:**
 - Без транскодирования -- пересылка сырых RTP-пакетов
@@ -279,7 +279,7 @@ SQLite с WAL-режимом и включёнными foreign keys. Три та
 
 ### TURN-сервер
 
-Встроенный TURN-сервер на базе [pion/turn](https://github.com/pion/turn) запускается в том же процессе. Активируется переменной `VOCIPHER_TURN_IP`. Credentials генерируются автоматически при запуске.
+Встроенный TURN-сервер на базе [pion/turn](https://github.com/pion/turn) запускается в том же процессе. Активируется переменной `VOCALA_TURN_IP`. Credentials генерируются автоматически при запуске.
 
 ### Фронтенд
 

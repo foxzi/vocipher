@@ -42,7 +42,7 @@ func DefaultConfig(publicIP string) Config {
 		PublicIP: publicIP,
 		Port:     3478,
 		TLSPort:  5349,
-		Realm:    "vocipher",
+		Realm:    "vocala",
 		secret:   generateSecret(),
 	}
 }
@@ -56,13 +56,13 @@ func Start(cfg Config) (*Server, error) {
 		cfg.Port = 3478
 	}
 	if cfg.Realm == "" {
-		cfg.Realm = "vocipher"
+		cfg.Realm = "vocala"
 	}
 	if cfg.secret == "" {
 		cfg.secret = generateSecret()
 	}
 
-	username := "vocipher"
+	username := "vocala"
 	key := pionTurn.GenerateAuthKey(username, cfg.Realm, cfg.secret)
 
 	authHandler := func(u, realm string, srcAddr net.Addr) ([]byte, bool) {
@@ -137,7 +137,7 @@ func Start(cfg Config) (*Server, error) {
 // Credentials returns TURN username, password, and URIs for ICE config.
 // Returns both turn: (UDP) and turns: (TLS) URIs if TLS is enabled.
 func (s *Server) Credentials() (username, password string, uris []string) {
-	username = "vocipher"
+	username = "vocala"
 	password = s.cfg.secret
 	uris = []string{
 		fmt.Sprintf("turn:%s:%d?transport=udp", s.cfg.PublicIP, s.cfg.Port),

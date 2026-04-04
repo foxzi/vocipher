@@ -1,5 +1,5 @@
 services:
-  vocipher:
+  vocala:
     build: .
     expose:
       - "8090"
@@ -9,7 +9,7 @@ services:
       - "40000-40200:40000-40200/udp"
       - "40201:40201/tcp"
     volumes:
-      - vocipher-data:/app/data
+      - vocala-data:/app/data
       - ./config.yaml:/app/config.yaml:ro
     restart: unless-stopped
 
@@ -22,8 +22,8 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/certs:/etc/nginx/certs:ro
     depends_on:
-      - vocipher
+      - vocala
     restart: unless-stopped
 
 volumes:
-  vocipher-data:
+  vocala-data:

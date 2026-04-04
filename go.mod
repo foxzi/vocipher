@@ -1,4 +1,4 @@
-module github.com/kidandcat/vocipher
+module github.com/foxzi/vocala
 
 go 1.25.5
 

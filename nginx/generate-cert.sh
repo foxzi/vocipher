@@ -17,7 +17,7 @@ openssl req -x509 -nodes -days 365 \
     -newkey rsa:2048 \
     -keyout "$CERT_DIR/selfsigned.key" \
     -out "$CERT_DIR/selfsigned.crt" \
-    -subj "/CN=vocipher/O=Vocipher/C=US" \
+    -subj "/CN=vocala/O=Vocala/C=US" \
     -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:${LOCAL_IP}"
 
 echo "Self-signed certificate generated in $CERT_DIR (SAN includes ${LOCAL_IP})"

@@ -83,8 +83,8 @@ All database queries use parameterized statements (`?` placeholders). No string 
 
 1. **Use HTTPS** -- Deploy behind Nginx with TLS (see [deployment.md](deployment.md))
 2. **Set `Secure` cookie flag** -- Change `Secure: false` to `true` in `cmd/server/main.go` when using HTTPS
-3. **Enable TURN** -- Set `VOCIPHER_TURN_IP` for reliable NAT traversal
-4. **Restrict listen address** -- Use `VOCIPHER_ADDR=127.0.0.1:8090` when behind a reverse proxy
+3. **Enable TURN** -- Set `VOCALA_TURN_IP` for reliable NAT traversal
+4. **Restrict listen address** -- Use `VOCALA_ADDR=127.0.0.1:8090` when behind a reverse proxy
 5. **Firewall** -- Only expose ports 80, 443 (TCP) and 3478 (UDP) to the internet
 
 ---
@@ -160,6 +160,6 @@ IP-based ограничение скорости на всех HTTP-эндпои
 
 1. **Используйте HTTPS** -- разверните за Nginx с TLS (см. [deployment.md](deployment.md))
 2. **Включите `Secure` флаг кук** -- измените `Secure: false` на `true` при использовании HTTPS
-3. **Включите TURN** -- установите `VOCIPHER_TURN_IP` для надёжного NAT traversal
-4. **Ограничьте адрес прослушивания** -- `VOCIPHER_ADDR=127.0.0.1:8090` за реверс-прокси
+3. **Включите TURN** -- установите `VOCALA_TURN_IP` для надёжного NAT traversal
+4. **Ограничьте адрес прослушивания** -- `VOCALA_ADDR=127.0.0.1:8090` за реверс-прокси
 5. **Файрвол** -- откройте только порты 80, 443 (TCP) и 3478 (UDP)

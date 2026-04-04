@@ -62,7 +62,7 @@ function connectWS() {
             startWebRTC().then(() => {
                 if (wasCameraOn) startCamera();
             });
-        } else if (window.VOCIPHER_AUTO_JOIN) {
+        } else if (window.VOCALA_AUTO_JOIN) {
             // Auto-join from URL on first connect
             autoJoinFromURL();
         }
@@ -580,7 +580,7 @@ async function startWebRTC() {
         setupVAD(localStream);
 
         // Create peer connection with server-provided ICE config (includes TURN if configured)
-        const iceServers = window.VOCIPHER_ICE_SERVERS || [
+        const iceServers = window.VOCALA_ICE_SERVERS || [
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
         ];
@@ -1742,7 +1742,7 @@ function stopWSCamera() {
 // ─── Auto-join from URL ───────────────────────────────────────
 
 function autoJoinFromURL() {
-    const channelName = window.VOCIPHER_AUTO_JOIN;
+    const channelName = window.VOCALA_AUTO_JOIN;
     if (!channelName) return;
 
     const tryJoin = () => {

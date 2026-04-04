@@ -20,13 +20,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kidandcat/vocipher/internal/auth"
-	"github.com/kidandcat/vocipher/internal/channel"
-	"github.com/kidandcat/vocipher/internal/config"
-	"github.com/kidandcat/vocipher/internal/database"
-	"github.com/kidandcat/vocipher/internal/signaling"
-	embeddedTurn "github.com/kidandcat/vocipher/internal/turn"
-	rtc "github.com/kidandcat/vocipher/internal/webrtc"
+	"github.com/foxzi/vocala/internal/auth"
+	"github.com/foxzi/vocala/internal/channel"
+	"github.com/foxzi/vocala/internal/config"
+	"github.com/foxzi/vocala/internal/database"
+	"github.com/foxzi/vocala/internal/signaling"
+	embeddedTurn "github.com/foxzi/vocala/internal/turn"
+	rtc "github.com/foxzi/vocala/internal/webrtc"
 	"golang.org/x/time/rate"
 )
 
@@ -284,7 +284,7 @@ func main() {
 
 	// Graceful shutdown
 	go func() {
-		log.Printf("Vocipher server starting on http://localhost%s", cfg.Server.Addr)
+		log.Printf("Vocala server starting on http://localhost%s", cfg.Server.Addr)
 		if err := server.ListenAndServe(); err != http.ErrServerClosed {
 			log.Fatal("server error:", err)
 		}
