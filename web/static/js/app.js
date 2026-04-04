@@ -2216,6 +2216,19 @@ async function openSettings() {
                             onchange="toggleSounds()">
                     </label>
                 </div>
+                <div class="border-t border-vc-border pt-3">
+                    <div class="text-xs font-medium text-vc-muted mb-2">Change Password</div>
+                    <div class="space-y-2">
+                        <input type="password" id="settings-old-pw" placeholder="Current password"
+                            class="w-full px-3 py-2 bg-vc-bg border border-vc-border rounded-lg text-sm text-vc-text placeholder-vc-muted focus:outline-none focus:border-vc-accent transition">
+                        <input type="password" id="settings-new-pw" placeholder="New password (min 8 chars)"
+                            class="w-full px-3 py-2 bg-vc-bg border border-vc-border rounded-lg text-sm text-vc-text placeholder-vc-muted focus:outline-none focus:border-vc-accent transition">
+                        <button onclick="changePassword()" class="w-full px-3 py-2 bg-vc-channel hover:bg-vc-hover text-vc-text text-sm font-medium rounded-lg transition border border-vc-border">
+                            Change Password
+                        </button>
+                        <div id="settings-pw-msg" class="hidden text-xs"></div>
+                    </div>
+                </div>
             </div>
             <div class="px-4 py-3 border-t border-vc-border flex justify-end">
                 <button onclick="saveSettings()" class="px-4 py-2 bg-vc-accent hover:bg-vc-accent/80 text-white text-sm font-medium rounded-lg transition">
@@ -2250,6 +2263,45 @@ async function loadDeviceList() {
             spks.map(d => `<option value="${d.deviceId}" ${d.deviceId === selectedSpkId ? 'selected' : ''}>${escapeHTML(d.label || 'Speaker ' + (spks.indexOf(d) + 1))}</option>`).join('');
     } catch (e) {
         console.error('Failed to enumerate devices:', e);
+    }
+}
+
+async function changePassword() {
+    const oldPw = document.getElementById('settings-old-pw')?.value || '';
+    const newPw = document.getElementById('settings-new-pw')?.value || '';
+    const msgEl = document.getElementById('settings-pw-msg');
+
+    if (!oldPw || !newPw) {
+        msgEl.textContent = 'Fill in both fields';
+        msgEl.className = 'text-xs text-vc-red';
+        return;
+    }
+    if (newPw.length < 8) {
+        msgEl.textContent = 'New password must be at least 8 characters';
+        msgEl.className = 'text-xs text-vc-red';
+        return;
+    }
+
+    const form = new FormData();
+    form.append('old_password', oldPw);
+    form.append('new_password', newPw);
+    form.append('csrf_token', getCSRFToken());
+
+    try {
+        const res = await fetch('/account/password', { method: 'POST', body: form });
+        const data = await res.json();
+        if (res.ok) {
+            msgEl.textContent = 'Password changed';
+            msgEl.className = 'text-xs text-vc-green';
+            document.getElementById('settings-old-pw').value = '';
+            document.getElementById('settings-new-pw').value = '';
+        } else {
+            msgEl.textContent = data.error || 'Failed to change password';
+            msgEl.className = 'text-xs text-vc-red';
+        }
+    } catch (e) {
+        msgEl.textContent = 'Request failed';
+        msgEl.className = 'text-xs text-vc-red';
     }
 }
 

@@ -70,6 +70,15 @@ func Register(username, password string) (*User, error) {
 	}, nil
 }
 
+func CheckPassword(userID int64, password string) error {
+	var hash string
+	err := database.DB.QueryRow("SELECT password_hash FROM users WHERE id = ?", userID).Scan(&hash)
+	if err != nil {
+		return ErrInvalidAuth
+	}
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+}
+
 func Login(username, password string) (*User, error) {
 	var user User
 	var hash string

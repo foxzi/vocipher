@@ -492,6 +492,7 @@ func main() {
 	mux.HandleFunc("/channels/invite", requireAuth(csrfProtect(handleChannelInvite)))
 	mux.HandleFunc("/invite/", handleInviteAccept)
 	mux.HandleFunc("/api/users", requireAuth(handleAPIUsers))
+	mux.HandleFunc("/account/password", requireAuth(csrfProtect(handleChangePassword)))
 
 	// Admin routes
 	mux.HandleFunc("/admin", requireAdmin(handleAdmin))
@@ -1108,6 +1109,41 @@ func handleChannelMemberRemove(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- API ---
+
+func handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	user := userFromContext(r)
+	oldPw := r.FormValue("old_password")
+	newPw := r.FormValue("new_password")
+
+	if err := auth.CheckPassword(user.ID, oldPw); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Current password is incorrect"})
+		return
+	}
+
+	if len(newPw) < cfg.Auth.MinPassword {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("Password must be at least %d characters", cfg.Auth.MinPassword)})
+		return
+	}
+
+	if err := auth.SetUserPassword(user.ID, newPw); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to change password"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"ok": "true"})
+}
 
 func handleAPIUsers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
