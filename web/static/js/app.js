@@ -1185,6 +1185,7 @@ function updateScreenPreviewOverlay() {
 }
 
 function cleanupWebRTC() {
+    console.log('cleanupWebRTC: stopping all media');
     clearInterval(screenPreviewInterval);
     screenPreviewInterval = null;
     latestScreenPreview = null;
@@ -1220,10 +1221,15 @@ function cleanupWebRTC() {
         peerConnection.close();
         peerConnection = null;
     }
+    if (processedStream) {
+        processedStream.getTracks().forEach(t => t.stop());
+        processedStream = null;
+    }
     if (localStream) {
         localStream.getTracks().forEach(t => t.stop());
         localStream = null;
     }
+    gainNode = null;
     isSpeaking = false;
 }
 
