@@ -1,6 +1,6 @@
 let ws = null;
 let currentChannelID = null;
-let isMuted = false;
+let isMuted = localStorage.getItem('vocala-muted') === 'true';
 let reconnectAttempts = 0;
 
 // XSS-safe HTML escaping
@@ -85,7 +85,7 @@ function avatarURL(username) {
 let peerConnection = null;
 let localStream = null;
 let micReady = false;
-let pushToTalk = false;
+let pushToTalk = localStorage.getItem('vocala-ptt') === 'true';
 let pttActive = false;
 
 // VAD state
@@ -95,7 +95,7 @@ let gainNode = null;
 let processedStream = null; // audio stream routed through GainNode for VAD control
 let vadInterval = null;
 let isSpeaking = false;
-let vadThreshold = 25;
+let vadThreshold = parseInt(localStorage.getItem('vocala-vad-threshold')) || 25;
 let currentVadLevel = 0;
 
 // Screen share state
@@ -109,7 +109,7 @@ let screenShareUsername = null;
 // Camera state
 let cameraStream = null;
 let cameraSender = null;
-let isCameraOn = false;
+let isCameraOn = localStorage.getItem('vocala-camera') === 'true';
 let remoteCameras = {}; // userID -> { stream, username }
 let lastServerOfferTime = 0;
 
@@ -484,7 +484,12 @@ function joinChannel(channelID, channelName) {
     `;
 
     // Start WebRTC (TCP candidates available for mobile)
-    startWebRTC();
+    startWebRTC().then(() => {
+        // Restore camera if it was on before page reload
+        if (localStorage.getItem('vocala-camera') === 'true' && !isCameraOn) {
+            startCamera();
+        }
+    });
 }
 
 function updateMainContent(channelID, users) {
@@ -589,6 +594,7 @@ function leaveChannel() {
     if (!currentChannelID) return;
     sendWS({ type: 'leave_channel' });
     currentChannelID = null;
+    localStorage.setItem('vocala-camera', 'false');
     cleanupWebRTC();
 
     // Reset URL
@@ -644,6 +650,7 @@ function toggleMute() {
     if (!localStream && isMuted) return;
 
     isMuted = !isMuted;
+    localStorage.setItem('vocala-muted', isMuted);
     sendWS({ type: 'mute', payload: { muted: isMuted } });
 
     // Mute/unmute via GainNode
@@ -656,6 +663,7 @@ function toggleMute() {
 
 function togglePTT() {
     pushToTalk = !pushToTalk;
+    localStorage.setItem('vocala-ptt', pushToTalk);
     const btn = document.getElementById('ptt-btn');
     const hint = document.getElementById('ptt-hint');
     if (btn) {
@@ -809,6 +817,10 @@ async function startWebRTC() {
             type: 'webrtc_offer',
             payload: { sdp: offer.sdp },
         });
+
+        // Restore saved state
+        sendWS({ type: 'mute', payload: { muted: isMuted } });
+        updateMuteUI();
 
     } catch (err) {
         console.error('WebRTC mic setup failed, trying receive-only:', err);
@@ -1121,6 +1133,7 @@ async function toggleCamera() {
     } else {
         await startCamera();
     }
+    localStorage.setItem('vocala-camera', isCameraOn);
 }
 
 async function startCamera() {
@@ -1531,6 +1544,7 @@ function updateSelfSpeakingUI(speaking) {
 
 function setVadThreshold(value) {
     vadThreshold = parseInt(value);
+    localStorage.setItem('vocala-vad-threshold', vadThreshold);
     const label = document.getElementById('vad-threshold-label');
     if (label) label.textContent = vadThreshold;
     const marker = document.getElementById('vad-threshold-marker');
@@ -2244,51 +2258,66 @@ function toggleThemePicker() {
 
 // --- Guest invite link ---
 
-async function createGuestLink(channelId) {
+function createGuestLink(channelId) {
+    const existing = document.getElementById('guest-link-popup');
+    if (existing) { existing.remove(); return; }
+
+    const popup = document.createElement('div');
+    popup.id = 'guest-link-popup';
+    popup.className = 'fixed top-20 right-4 bg-vc-sidebar border border-vc-border rounded-xl shadow-2xl p-4 z-50 w-80 fade-in';
+    popup.innerHTML = `
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-bold text-vc-text">Guest Invite Link</span>
+            <button onclick="document.getElementById('guest-link-popup').remove()" class="text-vc-muted hover:text-vc-text">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="flex gap-2 mb-3">
+            <button onclick="generateGuestLink(${channelId}, 1)" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-vc-border hover:border-vc-accent hover:text-vc-accent transition text-vc-muted">1h</button>
+            <button onclick="generateGuestLink(${channelId}, 6)" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-vc-border hover:border-vc-accent hover:text-vc-accent transition text-vc-muted">6h</button>
+            <button onclick="generateGuestLink(${channelId}, 24)" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-vc-accent bg-vc-accent/10 text-vc-accent transition">24h</button>
+            <button onclick="generateGuestLink(${channelId}, 72)" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-vc-border hover:border-vc-accent hover:text-vc-accent transition text-vc-muted">3d</button>
+            <button onclick="generateGuestLink(${channelId}, 168)" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-vc-border hover:border-vc-accent hover:text-vc-accent transition text-vc-muted">7d</button>
+        </div>
+        <div id="guest-link-result" class="text-center text-xs text-vc-muted">Select link duration</div>
+    `;
+    document.body.appendChild(popup);
+}
+
+async function generateGuestLink(channelId, hours) {
+    const resultEl = document.getElementById('guest-link-result');
+    if (!resultEl) return;
+    resultEl.innerHTML = '<span class="text-vc-muted">Generating...</span>';
+
     const form = new FormData();
     form.append('channel_id', channelId);
-    form.append('hours', '24');
+    form.append('hours', hours);
     form.append('csrf_token', getCSRFToken());
 
     try {
         const res = await fetch('/channels/guest-invite', { method: 'POST', body: form });
         if (!res.ok) {
-            alert('Failed to create guest link');
+            resultEl.innerHTML = '<span class="text-vc-red">Failed to generate link</span>';
             return;
         }
         const data = await res.json();
         const url = window.location.origin + data.url;
-
-        // Show inline popup
-        const existing = document.getElementById('guest-link-popup');
-        if (existing) existing.remove();
-
-        const popup = document.createElement('div');
-        popup.id = 'guest-link-popup';
-        popup.className = 'fixed top-20 right-4 bg-vc-sidebar border border-vc-border rounded-xl shadow-2xl p-4 z-50 w-80 fade-in';
-        popup.innerHTML = `
-            <div class="flex items-center justify-between mb-2">
-                <span class="text-sm font-bold text-vc-text">Guest Invite Link</span>
-                <button onclick="document.getElementById('guest-link-popup').remove()" class="text-vc-muted hover:text-vc-text">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            </div>
-            <div class="flex gap-1.5 mb-1">
+        const label = hours >= 24 ? Math.floor(hours / 24) + 'd' : hours + 'h';
+        resultEl.innerHTML = `
+            <div class="flex gap-1.5 mb-1.5">
                 <input type="text" value="${escapeHTML(url)}" readonly
                     class="flex-1 px-2.5 py-1.5 bg-vc-bg border border-vc-border rounded-lg text-xs text-vc-text font-mono select-all focus:outline-none">
-                <button onclick="navigator.clipboard.writeText('${url}').then(() => this.textContent = 'Copied!')"
+                <button onclick="navigator.clipboard.writeText('${url}').then(() => this.textContent = 'OK')"
                     class="px-2.5 py-1.5 bg-vc-accent hover:bg-vc-accent/80 text-white text-xs font-medium rounded-lg transition whitespace-nowrap">
                     Copy
                 </button>
             </div>
-            <div class="text-[10px] text-vc-muted">Expires in ${data.hours}h. Guest sees only this channel.</div>
+            <div class="text-[10px] text-vc-muted">Expires in ${label}. Guest sees only this channel.</div>
         `;
-        document.body.appendChild(popup);
-        setTimeout(() => popup.remove(), 30000);
     } catch (err) {
-        console.error('Failed to create guest link:', err);
+        resultEl.innerHTML = '<span class="text-vc-red">Request failed</span>';
     }
 }
 
