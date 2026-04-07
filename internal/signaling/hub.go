@@ -551,6 +551,21 @@ func handleMessage(c *Client, msg Message) {
 		})
 		GlobalHub.BroadcastToChannel(chID, reactionMsg)
 
+	case "clear_chat":
+		if !c.IsAdmin {
+			return
+		}
+		chID := channel.GetUserChannel(c.UserID)
+		if chID == 0 {
+			return
+		}
+		database.ClearChannelMessages(chID)
+		clearMsg, _ := json.Marshal(map[string]any{
+			"type":       "chat_cleared",
+			"channel_id": chID,
+		})
+		GlobalHub.BroadcastToChannel(chID, clearMsg)
+
 	case "screen_preview":
 		var p struct {
 			Image string `json:"image"`

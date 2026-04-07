@@ -246,6 +246,10 @@ function handleWSMessage(msg) {
         case 'chat_history':
             loadChatHistory(msg.messages || []);
             break;
+        case 'chat_cleared':
+            const chatContainer = document.getElementById('chat-messages');
+            if (chatContainer) chatContainer.innerHTML = '';
+            break;
         case 'chat_reaction':
             addChatReaction(msg);
             break;
@@ -549,6 +553,7 @@ function joinChannel(channelID, channelName) {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
                         </svg>
                         <span class="text-xs font-medium text-vc-muted">Chat</span>
+                        ${window.VOCALA_IS_ADMIN ? `<button onclick="clearChat()" class="ml-auto text-[10px] text-vc-muted hover:text-vc-red transition" title="Clear chat history">Clear</button>` : ''}
                     </div>
                     <div id="chat-messages" class="flex-1 overflow-y-auto p-2 space-y-1 min-h-0"></div>
                     <div class="p-2 border-t border-vc-border">
@@ -2030,6 +2035,11 @@ function hideGlobalMicWarning() {
 // ─── Chat ─────────────────────────────────────────────────────
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '👏', '🔥'];
+
+function clearChat() {
+    if (!confirm('Clear all chat messages in this channel?')) return;
+    sendWS({ type: 'clear_chat' });
+}
 
 function sendChatMessage(event) {
     event.preventDefault();

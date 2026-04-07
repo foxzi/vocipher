@@ -149,6 +149,11 @@ func GetChatHistory(channelID int64, limit int) ([]ChatMessage, error) {
 	return msgs, nil
 }
 
+// ClearChannelMessages deletes all messages in a channel.
+func ClearChannelMessages(channelID int64) {
+	DB.Exec(`DELETE FROM chat_messages WHERE channel_id = ?`, channelID)
+}
+
 // CleanupOldMessages removes messages older than the given retention period.
 func CleanupOldMessages(retentionDays int) (int64, error) {
 	cutoff := time.Now().AddDate(0, 0, -retentionDays).Unix()
