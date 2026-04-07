@@ -933,12 +933,16 @@ async function startWebRTC() {
         // Renegotiation needed (e.g. after addTrack/removeTrack)
         let negoTimeout = null;
         peerConnection.onnegotiationneeded = async () => {
-            // Debounce to avoid racing with server-initiated renegotiation
+            // Debounce to coalesce multiple track additions
             if (negoTimeout) clearTimeout(negoTimeout);
             negoTimeout = setTimeout(async () => {
-                // Skip if recently handled a server-initiated offer (avoid conflict)
-                if (Date.now() - lastServerOfferTime < 3000) return;
                 try {
+                    if (!peerConnection) return;
+                    // Wait for stable state (server offer may be in progress)
+                    for (let i = 0; i < 20; i++) {
+                        if (peerConnection.signalingState === 'stable') break;
+                        await new Promise(r => setTimeout(r, 200));
+                    }
                     if (!peerConnection || peerConnection.signalingState !== 'stable') return;
                     const offer = await peerConnection.createOffer();
                     if (peerConnection.signalingState !== 'stable') return;
