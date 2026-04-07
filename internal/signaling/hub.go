@@ -1,10 +1,12 @@
 package signaling
 
 import (
+	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"github.com/foxzi/vocala/internal/logger"
+	"math/big"
 	"net/http"
 	"sync"
 	"time"
@@ -167,8 +169,9 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			logger.Info("websocket upgrade error: %v", err)
 			return
 		}
-		// Use negative ID to avoid collision with real users
-		guestID := -(time.Now().UnixNano() % 1000000)
+		// Use crypto/rand for guest ID to avoid collisions
+		randN, _ := rand.Int(rand.Reader, big.NewInt(1<<50))
+		guestID := -randN.Int64() - 1 // always negative, never 0
 		client = &Client{
 			UserID:         guestID,
 			Username:       gs.GuestName + " (guest)",
@@ -375,15 +378,18 @@ func handleMessage(c *Client, msg Message) {
 
 	case "force_mute":
 		// Admin or channel creator can force-mute another user
-		if !c.IsAdmin {
-			return
-		}
 		var p struct {
 			UserID int64 `json:"user_id"`
 		}
 		json.Unmarshal(msg.Payload, &p)
+		chID := channel.GetUserChannel(c.UserID)
+		if chID == 0 {
+			return
+		}
+		if !c.IsAdmin && !channel.CanManage(chID, c.UserID, false) {
+			return
+		}
 		channel.SetMuted(p.UserID, true)
-		chID := channel.GetUserChannel(p.UserID)
 		if chID > 0 {
 			// Notify the muted user
 			notif, _ := json.Marshal(map[string]any{

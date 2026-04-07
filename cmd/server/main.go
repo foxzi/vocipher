@@ -1376,6 +1376,12 @@ func handleCreateGuestInvite(w http.ResponseWriter, r *http.Request) {
 
 	user := userFromContext(r)
 
+	// Verify user has access to this channel
+	if !channel.CanJoin(chID, user.ID, user.IsAdmin) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
 	token, err := channel.CreateGuestInvite(chID, user.ID, hours)
 	if err != nil {
 		http.Error(w, "Failed to create guest invite", http.StatusInternalServerError)
