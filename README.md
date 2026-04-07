@@ -74,6 +74,7 @@ See [docs/configuration.md](docs/configuration.md) for full YAML reference.
 | [Configuration](docs/configuration.md) | YAML config, environment variables |
 | [Deployment](docs/deployment.md) | Docker, Nginx, HTTPS, TURN, systemd |
 | [Security](docs/security.md) | Authentication, CSRF, private channels, hardening |
+| [OAuth](docs/oauth.md) | Google, GitHub, Keycloak, Authentik setup guides |
 
 ## Stack
 
@@ -85,7 +86,7 @@ See [docs/configuration.md](docs/configuration.md) for full YAML reference.
 | Database | SQLite (WAL mode) |
 | WebSocket | [Gorilla WebSocket](https://github.com/gorilla/websocket) |
 | Frontend | HTMX + Tailwind CSS + Vanilla JS |
-| Auth | bcrypt + session cookies |
+| Auth | bcrypt + session cookies + OAuth2/OIDC |
 
 ## Development
 

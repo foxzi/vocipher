@@ -205,6 +205,16 @@ Channels can be created as private (locked). All users see private channels in t
 | `/invite/{token}` | GET | Accept invite link |
 | `/api/users` | GET | List active users (for member picker) |
 
+### OAuth2 / OpenID Connect
+
+Vocala supports external authentication via OAuth2/OIDC. Configurable providers (Google, GitHub, Keycloak, Authentik, GitLab, etc.) appear as buttons on the login page.
+
+- OAuth flow: redirect to provider -> callback with code -> exchange for token -> fetch userinfo
+- Users auto-created on first OAuth login, linked by email to existing accounts
+- `auto_activate` option to skip admin approval for trusted providers
+- State verification via cookie to prevent CSRF
+- See [docs/oauth.md](oauth.md) for detailed setup instructions
+
 ### TURN Server
 
 The embedded TURN server uses [pion/turn](https://github.com/pion/turn) and runs inside the same process. It is activated by setting the `VOCALA_TURN_IP` environment variable to the server's public IP address.
@@ -307,6 +317,15 @@ SFU поддерживает отдельные видеотреки камер�
 
 - Треки камеры используют `streamID = "camera-{userID}"` для стабильной дедупликации при ренеготиации
 - Сетка камер отображается над аватарами пользователей
+
+### OAuth2 / OpenID Connect
+
+Vocala поддерживает внешнюю авторизацию через OAuth2/OIDC. Настраиваемые провайдеры (Google, GitHub, Keycloak, Authentik, GitLab и др.) отображаются кнопками на странице логина.
+
+- Пользователи создаются автоматически при первом OAuth входе
+- Привязка по email к существующим аккаунтам
+- `auto_activate` для автоматической активации без ожидания админа
+- Подробные инструкции: [docs/oauth.md](oauth.md)
 
 ### Приватные каналы
 

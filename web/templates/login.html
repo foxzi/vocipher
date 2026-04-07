@@ -46,6 +46,20 @@
             </button>
         </form>
 
+        {{if .OAuthProviders}}
+        <div class="mt-4 pt-4 border-t border-vc-border">
+            <p class="text-vc-muted text-xs text-center mb-3">Or sign in with</p>
+            <div class="flex flex-col gap-2">
+                {{range .OAuthProviders}}
+                <a href="/auth/oauth/{{.Name}}"
+                    class="w-full py-2.5 bg-vc-channel hover:bg-vc-hover text-vc-text font-medium rounded-lg transition text-center text-sm border border-vc-border">
+                    {{.Name}}
+                </a>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+
         {{if .RegistrationEnabled}}
         <div class="mt-6 text-center">
             <p class="text-vc-muted text-sm">Don't have an account?</p>

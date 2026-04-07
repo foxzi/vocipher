@@ -14,6 +14,7 @@ type Config struct {
 	WebRTC   WebRTCConfig   `yaml:"webrtc"`
 	TURN     TURNConfig     `yaml:"turn"`
 	Auth     AuthConfig     `yaml:"auth"`
+	OAuth    OAuthConfig    `yaml:"oauth"`
 	Security SecurityConfig `yaml:"security"`
 }
 
@@ -58,6 +59,22 @@ type AuthConfig struct {
 
 type SecurityConfig struct {
 	AllowedOrigins []string `yaml:"allowed_origins"` // empty = same-origin only
+}
+
+type OAuthProvider struct {
+	Name         string   `yaml:"name"` // display name ("Google", "GitHub", etc.)
+	ClientID     string   `yaml:"client_id"`
+	ClientSecret string   `yaml:"client_secret"`
+	AuthURL      string   `yaml:"auth_url"`     // authorization endpoint
+	TokenURL     string   `yaml:"token_url"`    // token endpoint
+	UserInfoURL  string   `yaml:"userinfo_url"` // userinfo endpoint (for getting email/name)
+	Scopes       []string `yaml:"scopes"`
+	AutoActivate bool     `yaml:"auto_activate"` // auto-activate OAuth users (default: true)
+}
+
+type OAuthConfig struct {
+	Enabled   bool            `yaml:"enabled"`
+	Providers []OAuthProvider `yaml:"providers"`
 }
 
 // Default returns config with sensible defaults.

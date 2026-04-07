@@ -49,6 +49,8 @@ contents:
     dst: /usr/share/doc/vocala/deployment.md
   - src: ./docs/security.md
     dst: /usr/share/doc/vocala/security.md
+  - src: ./docs/oauth.md
+    dst: /usr/share/doc/vocala/oauth.md
   - src: ./README.md
     dst: /usr/share/doc/vocala/README.md
 

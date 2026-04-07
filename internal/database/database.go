@@ -107,6 +107,9 @@ func migrate() {
 		`ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE channels ADD COLUMN is_private INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE users ADD COLUMN oauth_provider TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN oauth_id TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''`,
 	}
 	for _, q := range migrations {
 		DB.Exec(q) // ignore errors if columns already exist

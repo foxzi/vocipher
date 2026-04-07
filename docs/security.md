@@ -53,6 +53,8 @@ All responses include:
 - **Private channel management:** Only the creator or admins can add/remove members and generate invite links
 - **Invite links:** 7-day expiry, token-based, auto-add member on accept
 - **Chat messages:** Limited to 2000 characters, auto-cleaned by retention policy
+- **OAuth2/OIDC:** State verification via cookie, token exchange server-side, userinfo fetched server-side
+- **OAuth users:** Cannot set password directly, linked by email to existing accounts
 - **Self-protection:** Admins cannot modify their own account (prevents self-deactivation)
 
 ### XSS Prevention
@@ -136,6 +138,8 @@ IP-based ограничение скорости на всех HTTP-эндпои
 - **Управление приватными каналами:** Только создатель или администраторы могут добавлять/удалять участников и генерировать invite-ссылки
 - **Invite-ссылки:** Срок действия 7 дней, токен-based, автоматическое добавление при переходе
 - **Чат:** Сообщения ограничены 2000 символами, автоочистка по retention policy
+- **OAuth2/OIDC:** Верификация state через cookie, обмен токенами на сервере
+- **OAuth пользователи:** Не могут установить пароль напрямую, привязка по email
 - **Самозащита:** Админ не может деактивировать/удалить свой аккаунт
 
 ### Предотвращение XSS

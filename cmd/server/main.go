@@ -28,6 +28,7 @@ import (
 	"github.com/foxzi/vocala/internal/signaling"
 	embeddedTurn "github.com/foxzi/vocala/internal/turn"
 	rtc "github.com/foxzi/vocala/internal/webrtc"
+	"golang.org/x/oauth2"
 	"golang.org/x/term"
 	"golang.org/x/time/rate"
 )
@@ -496,6 +497,7 @@ func main() {
 	mux.HandleFunc("/login", handleLogin)
 	mux.HandleFunc("/register", handleRegister)
 	mux.HandleFunc("/logout", handleLogout)
+	mux.HandleFunc("/auth/oauth/", handleOAuth)
 
 	// App routes
 	mux.HandleFunc("/", requireAuth(handleApp))
@@ -609,6 +611,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			"CSRFToken":           csrfToken,
 			"Next":                r.URL.Query().Get("next"),
 			"RegistrationEnabled": cfg.Auth.RegistrationEnabled,
+			"OAuthProviders":      cfg.OAuth.Providers,
 		})
 		return
 	}
@@ -640,8 +643,9 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		csrfToken := setCSRFCookie(w, r)
 		templates["login.html"].ExecuteTemplate(w, "layout.html", map[string]any{
-			"Error":     "Invalid username or password",
-			"CSRFToken": csrfToken,
+			"Error":          "Invalid username or password",
+			"CSRFToken":      csrfToken,
+			"OAuthProviders": cfg.OAuth.Providers,
 		})
 		return
 	}
@@ -1394,4 +1398,163 @@ func handleCreateGuestInvite(w http.ResponseWriter, r *http.Request) {
 		"url":   fmt.Sprintf("/guest/%s", token),
 		"hours": hours,
 	})
+}
+
+// --- OAuth2 ---
+
+func getOAuthProvider(name string) *config.OAuthProvider {
+	for i := range cfg.OAuth.Providers {
+		if cfg.OAuth.Providers[i].Name == name {
+			return &cfg.OAuth.Providers[i]
+		}
+	}
+	return nil
+}
+
+func oauthConfig(provider *config.OAuthProvider, r *http.Request) *oauth2.Config {
+	scheme := "https"
+	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
+		scheme = "http"
+	}
+	redirectURL := fmt.Sprintf("%s://%s/auth/oauth/%s/callback", scheme, r.Host, provider.Name)
+	return &oauth2.Config{
+		ClientID:     provider.ClientID,
+		ClientSecret: provider.ClientSecret,
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  provider.AuthURL,
+			TokenURL: provider.TokenURL,
+		},
+		RedirectURL: redirectURL,
+		Scopes:      provider.Scopes,
+	}
+}
+
+func handleOAuth(w http.ResponseWriter, r *http.Request) {
+	if !cfg.OAuth.Enabled {
+		http.Error(w, "OAuth not configured", http.StatusNotFound)
+		return
+	}
+
+	// Parse path: /auth/oauth/{provider} or /auth/oauth/{provider}/callback
+	path := strings.TrimPrefix(r.URL.Path, "/auth/oauth/")
+	parts := strings.SplitN(path, "/", 2)
+	providerName := parts[0]
+	isCallback := len(parts) > 1 && parts[1] == "callback"
+
+	provider := getOAuthProvider(providerName)
+	if provider == nil {
+		http.Error(w, "unknown OAuth provider", http.StatusNotFound)
+		return
+	}
+
+	oc := oauthConfig(provider, r)
+
+	if !isCallback {
+		// Generate state and redirect to OAuth provider
+		state := auth.GenerateToken()
+		http.SetCookie(w, &http.Cookie{
+			Name:     "oauth_state",
+			Value:    state,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   cfg.Auth.CookieSecure,
+			SameSite: http.SameSiteLaxMode,
+			MaxAge:   600,
+		})
+		http.Redirect(w, r, oc.AuthCodeURL(state), http.StatusTemporaryRedirect)
+		return
+	}
+
+	// Callback — verify state
+	stateCookie, err := r.Cookie("oauth_state")
+	if err != nil || stateCookie.Value == "" || stateCookie.Value != r.URL.Query().Get("state") {
+		http.Error(w, "invalid OAuth state", http.StatusBadRequest)
+		return
+	}
+	// Clear state cookie
+	http.SetCookie(w, &http.Cookie{Name: "oauth_state", Value: "", Path: "/", MaxAge: -1})
+
+	// Exchange code for token
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		http.Error(w, "missing OAuth code", http.StatusBadRequest)
+		return
+	}
+	token, err := oc.Exchange(r.Context(), code)
+	if err != nil {
+		logger.Error("OAuth token exchange failed: %v", err)
+		http.Error(w, "OAuth authentication failed", http.StatusInternalServerError)
+		return
+	}
+
+	// Fetch user info
+	client := oc.Client(r.Context(), token)
+	resp, err := client.Get(provider.UserInfoURL)
+	if err != nil {
+		logger.Error("OAuth userinfo fetch failed: %v", err)
+		http.Error(w, "Failed to get user info", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	var userInfo map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
+		logger.Error("OAuth userinfo decode failed: %v", err)
+		http.Error(w, "Failed to parse user info", http.StatusInternalServerError)
+		return
+	}
+
+	// Extract user data (compatible with Google, GitHub, most OIDC providers)
+	oauthID := ""
+	email := ""
+	displayName := ""
+
+	if v, ok := userInfo["sub"].(string); ok {
+		oauthID = v // OIDC standard
+	} else if v, ok := userInfo["id"].(float64); ok {
+		oauthID = fmt.Sprintf("%.0f", v) // GitHub uses numeric ID
+	} else if v, ok := userInfo["id"].(string); ok {
+		oauthID = v
+	}
+	if v, ok := userInfo["email"].(string); ok {
+		email = v
+	}
+	if v, ok := userInfo["name"].(string); ok {
+		displayName = v
+	} else if v, ok := userInfo["login"].(string); ok {
+		displayName = v // GitHub
+	}
+
+	if oauthID == "" {
+		http.Error(w, "OAuth provider did not return user ID", http.StatusBadRequest)
+		return
+	}
+
+	autoActivate := provider.AutoActivate
+	user, err := auth.FindOrCreateOAuthUser(providerName, oauthID, email, displayName, autoActivate)
+	if err != nil {
+		logger.Error("OAuth user creation failed: %v", err)
+		http.Error(w, "Failed to create user", http.StatusInternalServerError)
+		return
+	}
+
+	if !user.IsActive {
+		csrfToken := setCSRFCookie(w, r)
+		templates["login.html"].ExecuteTemplate(w, "layout.html", map[string]any{
+			"Info":                "Account pending activation. Contact an administrator.",
+			"CSRFToken":           csrfToken,
+			"RegistrationEnabled": cfg.Auth.RegistrationEnabled,
+			"OAuthProviders":      cfg.OAuth.Providers,
+		})
+		return
+	}
+
+	// Create session
+	sessionToken, err := auth.CreateSession(user.ID)
+	if err != nil {
+		http.Error(w, "Failed to create session", http.StatusInternalServerError)
+		return
+	}
+	http.SetCookie(w, sessionCookie(sessionToken, 86400*cfg.Auth.SessionDays))
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

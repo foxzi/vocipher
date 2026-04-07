@@ -34,5 +34,31 @@ auth:
   rate_limit_rps: 10        # Requests per second per IP
   rate_limit_burst: 20      # Burst limit
 
+# OAuth2 / OpenID Connect (optional)
+# Supports Google, GitHub, Keycloak, any OIDC-compatible provider.
+# Users who sign in via OAuth are auto-created on first login.
+oauth:
+  enabled: false
+  providers:
+    # Google example:
+    # - name: Google
+    #   client_id: "your-client-id.apps.googleusercontent.com"
+    #   client_secret: "your-client-secret"
+    #   auth_url: "https://accounts.google.com/o/oauth2/auth"
+    #   token_url: "https://oauth2.googleapis.com/token"
+    #   userinfo_url: "https://www.googleapis.com/oauth2/v3/userinfo"
+    #   scopes: ["openid", "email", "profile"]
+    #   auto_activate: true
+    #
+    # GitHub example:
+    # - name: GitHub
+    #   client_id: "your-client-id"
+    #   client_secret: "your-client-secret"
+    #   auth_url: "https://github.com/login/oauth/authorize"
+    #   token_url: "https://github.com/login/oauth/access_token"
+    #   userinfo_url: "https://api.github.com/user"
+    #   scopes: ["user:email"]
+    #   auto_activate: true
+
 security:
   allowed_origins: []       # Empty = same-origin only. Add domains for CORS.

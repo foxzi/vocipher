@@ -123,6 +123,13 @@ func CreateSession(userID int64) (string, error) {
 	return token, nil
 }
 
+// GenerateToken creates a random hex token.
+func GenerateToken() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
 // CleanExpiredSessions removes expired sessions from the database.
 func CleanExpiredSessions() {
 	database.DB.Exec("DELETE FROM sessions WHERE expires_at < datetime('now')")
@@ -241,4 +248,85 @@ func SetUserPassword(userID int64, newPassword string) error {
 func DeleteUser(userID int64) error {
 	_, err := database.DB.Exec("DELETE FROM users WHERE id = ?", userID)
 	return err
+}
+
+// FindOrCreateOAuthUser finds user by OAuth provider+id, or creates a new one.
+func FindOrCreateOAuthUser(provider, oauthID, email, displayName string, autoActivate bool) (*User, error) {
+	// Try to find existing OAuth user
+	var u User
+	var isAdmin, isActive int
+	err := database.DB.QueryRow(
+		"SELECT id, username, is_admin, is_active, created_at FROM users WHERE oauth_provider = ? AND oauth_id = ?",
+		provider, oauthID,
+	).Scan(&u.ID, &u.Username, &isAdmin, &isActive, &u.CreatedAt)
+	if err == nil {
+		u.IsAdmin = isAdmin == 1
+		u.IsActive = isActive == 1
+		return &u, nil
+	}
+
+	// Try to find by email and link
+	if email != "" {
+		err = database.DB.QueryRow(
+			"SELECT id, username, is_admin, is_active, created_at FROM users WHERE email = ? AND email != ''",
+			email,
+		).Scan(&u.ID, &u.Username, &isAdmin, &isActive, &u.CreatedAt)
+		if err == nil {
+			// Link existing account to OAuth
+			database.DB.Exec("UPDATE users SET oauth_provider = ?, oauth_id = ? WHERE id = ?", provider, oauthID, u.ID)
+			u.IsAdmin = isAdmin == 1
+			u.IsActive = isActive == 1
+			return &u, nil
+		}
+	}
+
+	// Create new user
+	username := displayName
+	if username == "" {
+		username = email
+	}
+	if username == "" {
+		username = provider + "-" + oauthID[:8]
+	}
+	// Ensure unique username
+	for i := 0; i < 100; i++ {
+		var count int
+		database.DB.QueryRow("SELECT COUNT(*) FROM users WHERE username = ?", username).Scan(&count)
+		if count == 0 {
+			break
+		}
+		username = displayName + "-" + randomHex(3)
+	}
+
+	active := 0
+	if autoActivate {
+		active = 1
+	}
+	// Check if first user — auto-admin
+	var totalUsers int
+	database.DB.QueryRow("SELECT COUNT(*) FROM users").Scan(&totalUsers)
+	admin := 0
+	if totalUsers == 0 {
+		admin = 1
+		active = 1
+	}
+
+	res, err := database.DB.Exec(
+		"INSERT INTO users (username, password_hash, is_admin, is_active, oauth_provider, oauth_id, email) VALUES (?, '', ?, ?, ?, ?, ?)",
+		username, admin, active, provider, oauthID, email,
+	)
+	if err != nil {
+		return nil, err
+	}
+	id, _ := res.LastInsertId()
+	return &User{
+		ID: id, Username: username,
+		IsAdmin: admin == 1, IsActive: active == 1,
+	}, nil
+}
+
+func randomHex(n int) string {
+	b := make([]byte, n)
+	rand.Read(b)
+	return hex.EncodeToString(b)
 }
