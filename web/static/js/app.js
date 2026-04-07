@@ -142,12 +142,18 @@ let lastServerOfferTime = 0;
 
 function connectWS() {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsParams = window.VOCALA_GUEST_CHANNEL ? '?guest=1' : '';
+    let wsParams = '';
+    if (window.VOCALA_GUEST_CHANNEL) {
+        wsParams = '?guest=1';
+        if (window.VOCALA_GUEST_TOKEN) wsParams += '&token=' + encodeURIComponent(window.VOCALA_GUEST_TOKEN);
+    }
     ws = new WebSocket(`${proto}//${location.host}/ws${wsParams}`);
 
     ws.onopen = () => {
         reconnectAttempts = 0;
         setConnectionStatus('connected');
+        const dbg = document.getElementById('guest-debug');
+        if (dbg) dbg.textContent = 'WS connected, joining channel ' + (window.VOCALA_GUEST_CHANNEL || 'none');
 
         if (currentChannelID) {
             // Rejoin channel after reconnect
@@ -161,21 +167,31 @@ function connectWS() {
             });
         } else if (window.VOCALA_GUEST_CHANNEL) {
             // Guest auto-join their assigned channel
-            joinChannel(window.VOCALA_GUEST_CHANNEL, '');
+            try {
+                joinChannel(window.VOCALA_GUEST_CHANNEL, window.VOCALA_GUEST_NAME || 'Channel');
+            } catch (e) {
+                const dbg2 = document.getElementById('guest-debug');
+                if (dbg2) dbg2.textContent = 'joinChannel error: ' + e.message;
+                console.error('Guest joinChannel failed:', e);
+            }
         } else if (window.VOCALA_AUTO_JOIN) {
             // Auto-join from URL on first connect
             autoJoinFromURL();
         }
     };
 
-    ws.onclose = () => {
+    ws.onclose = (e) => {
         setConnectionStatus('reconnecting');
+        const dbg = document.getElementById('guest-debug');
+        if (dbg) dbg.textContent = 'WS closed: code=' + e.code + ' reason=' + e.reason;
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
         reconnectAttempts++;
         setTimeout(connectWS, delay);
     };
 
-    ws.onerror = () => {
+    ws.onerror = (e) => {
+        const dbg = document.getElementById('guest-debug');
+        if (dbg) dbg.textContent = 'WS error';
         ws.close();
     };
 
@@ -426,12 +442,24 @@ function toggleSidebar() {
     }
 }
 
+function toggleMobileChat() {
+    const panel = document.getElementById('chat-panel');
+    if (!panel) return;
+    panel.classList.toggle('hidden');
+    panel.classList.toggle('flex');
+    // Scroll to bottom when showing
+    if (!panel.classList.contains('hidden')) {
+        const msgs = document.getElementById('chat-messages');
+        if (msgs) msgs.scrollTop = msgs.scrollHeight;
+    }
+}
+
 function closeSidebarOnMobile() {
-    if (window.innerWidth < 768) { // md breakpoint
+    if (window.innerWidth < 768) {
         const sidebar = document.getElementById('sidebar');
         const overlay = document.getElementById('sidebar-overlay');
-        sidebar.classList.add('-translate-x-full');
-        overlay.classList.add('hidden');
+        if (sidebar) sidebar.classList.add('-translate-x-full');
+        if (overlay) overlay.classList.add('hidden');
     }
 }
 
@@ -546,14 +574,17 @@ function joinChannel(channelID, channelName) {
                         </div>
                     </div>
                 </div>
-                <!-- Chat panel -->
-                <div class="w-full md:w-80 border-t md:border-t-0 md:border-l border-vc-border flex flex-col bg-vc-sidebar/30 max-h-64 md:max-h-none">
+                <!-- Chat panel (hidden on mobile by default, toggle with button) -->
+                <div id="chat-panel" class="w-full md:w-80 border-t md:border-t-0 md:border-l border-vc-border flex flex-col bg-vc-sidebar/30 max-h-64 md:max-h-none hidden md:flex">
                     <div class="px-3 py-2 border-b border-vc-border flex items-center gap-2">
                         <svg class="w-4 h-4 text-vc-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
                         </svg>
                         <span class="text-xs font-medium text-vc-muted">Chat</span>
                         ${window.VOCALA_IS_ADMIN ? `<button onclick="clearChat()" class="ml-auto text-[10px] text-vc-muted hover:text-vc-red transition" title="Clear chat history">Clear</button>` : ''}
+                        <button onclick="toggleMobileChat()" class="ml-auto md:hidden text-vc-muted hover:text-vc-text">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
                     </div>
                     <div id="chat-messages" class="flex-1 overflow-y-auto p-2 space-y-1 min-h-0"></div>
                     <div class="p-2 border-t border-vc-border">
@@ -601,6 +632,11 @@ function joinChannel(channelID, channelName) {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
                         </svg>
                         <span class="hidden md:inline">PTT ${pushToTalk ? 'ON' : 'OFF'}</span>
+                    </button>
+                    <button onclick="toggleMobileChat()" class="md:hidden flex items-center gap-1.5 px-3 py-2 rounded-lg bg-vc-channel hover:bg-vc-hover text-vc-text transition text-sm">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                        </svg>
                     </button>
                     <div class="text-xs text-vc-muted hidden md:block" id="ptt-hint">${pushToTalk ? 'Hold Space to talk' : ''}</div>
                 </div>

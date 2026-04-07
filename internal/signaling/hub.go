@@ -153,13 +153,19 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			SendMedia: make(chan []byte, 64),
 		}
 	} else {
-		// Try guest session
-		cookie, err := r.Cookie("guest_session")
-		if err != nil || cookie.Value == "" {
+		// Try guest session (cookie or query param for mobile compatibility)
+		guestToken := ""
+		if cookie, err := r.Cookie("guest_session"); err == nil && cookie.Value != "" {
+			guestToken = cookie.Value
+		}
+		if guestToken == "" {
+			guestToken = r.URL.Query().Get("token")
+		}
+		if guestToken == "" {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		gs, err := channel.ValidateGuestSession(cookie.Value)
+		gs, err := channel.ValidateGuestSession(guestToken)
 		if err != nil {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return

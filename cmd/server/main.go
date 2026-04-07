@@ -1326,17 +1326,24 @@ func handleGuest(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   86400,
 	})
 
-	http.Redirect(w, r, "/guest-app", http.StatusSeeOther)
+	http.Redirect(w, r, "/guest-app?t="+sessionToken, http.StatusSeeOther)
 }
 
 func handleGuestApp(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie("guest_session")
-	if err != nil || cookie.Value == "" {
+	// Try cookie first, then query param (mobile fallback)
+	guestToken := ""
+	if cookie, err := r.Cookie("guest_session"); err == nil && cookie.Value != "" {
+		guestToken = cookie.Value
+	}
+	if guestToken == "" {
+		guestToken = r.URL.Query().Get("t")
+	}
+	if guestToken == "" {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 
-	gs, err := channel.ValidateGuestSession(cookie.Value)
+	gs, err := channel.ValidateGuestSession(guestToken)
 	if err != nil {
 		http.SetCookie(w, &http.Cookie{Name: "guest_session", Value: "", Path: "/", MaxAge: -1})
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -1354,6 +1361,7 @@ func handleGuestApp(w http.ResponseWriter, r *http.Request) {
 
 	templates["guest-app.html"].ExecuteTemplate(w, "layout.html", map[string]any{
 		"GuestName":   gs.GuestName,
+		"GuestToken":  guestToken,
 		"ChannelID":   ch.ID,
 		"ChannelName": ch.Name,
 		"ICEServers":  iceServers,

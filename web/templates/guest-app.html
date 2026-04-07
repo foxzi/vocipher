@@ -28,6 +28,7 @@
         <div class="flex-1 flex items-center justify-center">
             <div class="text-center text-vc-muted">
                 <p class="text-lg font-medium">Connecting...</p>
+                <p class="text-xs mt-2" id="guest-debug"></p>
             </div>
         </div>
     </div>
@@ -37,6 +38,8 @@
     window.VOCALA_ICE_SERVERS = {{toJSON .ICEServers}};
     window.VOCALA_GUEST_CHANNEL = {{.ChannelID}};
     window.VOCALA_GUEST_NAME = {{toJSON .GuestName}};
+    window.VOCALA_GUEST_TOKEN = {{toJSON .GuestToken}};
+    window.VOCALA_GUEST_CHANNEL_NAME = {{toJSON .ChannelName}};
 </script>
 <script src="/static/js/app.js?v={{.CacheBust}}"></script>
 {{end}}
