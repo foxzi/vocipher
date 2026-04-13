@@ -2122,7 +2122,9 @@ if (selfAvatar && selfAvatar.dataset.username) {
 
 connectWS();
 checkMicPermission();
-requestNotificationPermission();
+// Notification.requestPermission() must be called from a user gesture —
+// Firefox blocks it otherwise. Defer to the first click on the page.
+document.addEventListener('click', requestNotificationPermission, { once: true, capture: true });
 
 async function checkMicPermission() {
     try {
