@@ -677,6 +677,22 @@ func (s *SFU) addOutputTrack(destPeer *Peer, srcUserID int64, srcTrack *webrtc.T
 	logger.Debug("webrtc: forward %s %d->%d codec=%s pt=%d",
 		kind, srcUserID, destPeer.UserID,
 		srcTrack.Codec().MimeType, srcTrack.Codec().PayloadType)
+
+	// For video tracks (camera, screen), ask the publisher for a keyframe
+	// shortly after the new subscriber has had time to finish renegotiation.
+	// Without this the subscriber shows a black frame until the next
+	// intervalpli tick (up to several seconds) or a publisher-driven keyframe.
+	if kind == "screen" || kind == "camera" {
+		go func() {
+			time.Sleep(800 * time.Millisecond)
+			s.mu.RLock()
+			srcPeer, ok := s.peers[srcUserID]
+			s.mu.RUnlock()
+			if ok {
+				s.sendPLI(srcPeer, srcTrack)
+			}
+		}()
+	}
 	return nil
 }
 
