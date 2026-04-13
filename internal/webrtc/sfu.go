@@ -181,6 +181,7 @@ func RemoveSFU(channelID int64) {
 // HandleOffer processes an SDP offer from a client.
 func (s *SFU) HandleOffer(userID int64, username string, offerSDP string) error {
 	offer := webrtc.SessionDescription{Type: webrtc.SDPTypeOffer, SDP: offerSDP}
+	logger.Debug("webrtc: offer from user %d:\n%s", userID, offerSDP)
 
 	s.mu.RLock()
 	existingPeer, exists := s.peers[userID]
@@ -197,6 +198,7 @@ func (s *SFU) HandleOffer(userID int64, username string, offerSDP string) error 
 		if err := existingPeer.PC.SetLocalDescription(answer); err != nil {
 			return err
 		}
+		logger.Debug("webrtc: answer to user %d:\n%s", userID, answer.SDP)
 		data, _ := json.Marshal(map[string]any{
 			"type":    "webrtc_answer",
 			"payload": map[string]any{"sdp": answer.SDP},
@@ -221,6 +223,12 @@ func (s *SFU) HandleOffer(userID int64, username string, offerSDP string) error 
 
 	// Video tracks: if expectCamera flag is set, treat as camera; otherwise screen
 	pc.OnTrack(func(track *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
+		codec := track.Codec()
+		logger.Info("webrtc: incoming %s track from user %d: codec=%s pt=%d clock=%d channels=%d ssrc=%d rid=%q fmtp=%q",
+			track.Kind(), userID,
+			codec.MimeType, codec.PayloadType, codec.ClockRate, codec.Channels,
+			track.SSRC(), track.RID(), codec.SDPFmtpLine,
+		)
 		switch track.Kind() {
 		case webrtc.RTPCodecTypeAudio:
 			s.handleAudioTrack(peer, userID, username, track)
@@ -231,6 +239,13 @@ func (s *SFU) HandleOffer(userID int64, username string, offerSDP string) error 
 			} else {
 				s.handleScreenTrack(peer, userID, username, track)
 			}
+		}
+	})
+
+	pc.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
+		logger.Debug("webrtc: peer %d ICE state: %s", userID, state.String())
+		if state == webrtc.ICEConnectionStateFailed || state == webrtc.ICEConnectionStateDisconnected {
+			logger.Warn("webrtc: peer %d ICE %s — network problem (media may be stuck)", userID, state.String())
 		}
 	})
 
@@ -246,9 +261,11 @@ func (s *SFU) HandleOffer(userID int64, username string, offerSDP string) error 
 	})
 
 	var addExistingOnce sync.Once
+	var logPairOnce sync.Once
 	pc.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
 		logger.Debug("webrtc: peer %d connection state: %s", userID, state.String())
 		if state == webrtc.PeerConnectionStateConnected {
+			logPairOnce.Do(func() { go logSelectedCandidatePair(pc, userID) })
 			addExistingOnce.Do(func() { go s.addExistingTracksForPeer(peer, userID) })
 		}
 		if state == webrtc.PeerConnectionStateFailed || state == webrtc.PeerConnectionStateClosed {
@@ -269,6 +286,7 @@ func (s *SFU) HandleOffer(userID int64, username string, offerSDP string) error 
 		pc.Close()
 		return err
 	}
+	logger.Debug("webrtc: answer to user %d:\n%s", userID, answer.SDP)
 
 	s.mu.Lock()
 	s.peers[userID] = peer
@@ -603,7 +621,34 @@ func (s *SFU) addOutputTrack(destPeer *Peer, srcUserID int64, srcTrack *webrtc.T
 		destPeer.mu.Unlock()
 		return err
 	}
+	logger.Debug("webrtc: forward %s %d->%d codec=%s pt=%d",
+		kind, srcUserID, destPeer.UserID,
+		srcTrack.Codec().MimeType, srcTrack.Codec().PayloadType)
 	return nil
+}
+
+// logSelectedCandidatePair logs the nominated ICE candidate pair once the
+// connection is established. Helps diagnose NAT/TURN issues that affect both
+// audio and video.
+func logSelectedCandidatePair(pc *webrtc.PeerConnection, userID int64) {
+	// Stats may not be populated immediately after Connected fires.
+	time.Sleep(500 * time.Millisecond)
+	stats := pc.GetStats()
+	for _, stat := range stats {
+		pair, ok := stat.(webrtc.ICECandidatePairStats)
+		if !ok || !pair.Nominated || pair.State != webrtc.StatsICECandidatePairStateSucceeded {
+			continue
+		}
+		local, _ := stats[pair.LocalCandidateID].(webrtc.ICECandidateStats)
+		remote, _ := stats[pair.RemoteCandidateID].(webrtc.ICECandidateStats)
+		logger.Info("webrtc: peer %d ICE pair: local=%s/%s/%s:%d remote=%s/%s/%s:%d",
+			userID,
+			local.CandidateType, local.Protocol, local.IP, local.Port,
+			remote.CandidateType, remote.Protocol, remote.IP, remote.Port,
+		)
+		return
+	}
+	logger.Debug("webrtc: peer %d no nominated ICE pair found in stats", userID)
 }
 
 func (s *SFU) sendPLI(peer *Peer, track *webrtc.TrackRemote) {
@@ -684,7 +729,7 @@ func (s *SFU) doRenegotiate(peer *Peer) {
 		return
 	}
 
-	logger.Debug("webrtc: sending renegotiation offer to user %d", peer.UserID)
+	logger.Debug("webrtc: sending renegotiation offer to user %d:\n%s", peer.UserID, offer.SDP)
 	data, _ := json.Marshal(map[string]any{
 		"type":    "webrtc_offer",
 		"payload": map[string]any{"sdp": offer.SDP},
@@ -703,7 +748,7 @@ func (s *SFU) HandleAnswer(userID int64, answerSDP string) error {
 	peer.negoMu.Lock()
 	defer peer.negoMu.Unlock()
 
-	logger.Debug("webrtc: received answer from user %d, signaling state: %s", userID, peer.PC.SignalingState())
+	logger.Debug("webrtc: received answer from user %d, signaling state: %s\n%s", userID, peer.PC.SignalingState(), answerSDP)
 	return peer.PC.SetRemoteDescription(webrtc.SessionDescription{
 		Type: webrtc.SDPTypeAnswer,
 		SDP:  answerSDP,
