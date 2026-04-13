@@ -1116,6 +1116,17 @@ async function handleWebRTCOffer(payload) {
     lastServerOfferTime = Date.now();
 
     try {
+        // Perfect-negotiation: client is the "polite" peer. If we have our
+        // own offer in flight (have-local-offer), rollback and accept the
+        // server's offer. The server is "impolite" and drops client offers
+        // on glare, so rolling back here is what breaks the deadlock.
+        // onnegotiationneeded will fire again after we're stable and resend
+        // anything we lost.
+        if (peerConnection.signalingState !== 'stable') {
+            console.warn('WebRTC offer collision, rolling back local offer');
+            await peerConnection.setLocalDescription({ type: 'rollback' });
+        }
+
         await peerConnection.setRemoteDescription(
             new RTCSessionDescription({ type: 'offer', sdp: payload.sdp })
         );

@@ -189,15 +189,15 @@ func (s *SFU) HandleOffer(userID int64, username string, offerSDP string) error 
 
 	if exists {
 		// Glare handling: if server already has its own offer in flight
-		// (have-local-offer), rollback and accept the client's offer.
-		// Without this, SetRemoteDescription fails with InvalidModificationError
-		// and both sides get stuck — client never receives answer, server holds
-		// a stale pending offer. Server is designated as the "polite" peer.
+		// (have-local-offer), we cannot accept the client offer — pion v4
+		// does not expose rollback via its public API. Drop the client
+		// offer silently. The client must be "polite": when our pending
+		// server offer reaches it, the client will rollback its own offer
+		// and accept ours, ending the deadlock. After the exchange, the
+		// client's onnegotiationneeded fires again and its offer is re-sent.
 		if existingPeer.PC.SignalingState() == webrtc.SignalingStateHaveLocalOffer {
-			logger.Warn("webrtc: glare on user %d offer — rolling back server offer", userID)
-			if err := existingPeer.PC.SetLocalDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeRollback}); err != nil {
-				return err
-			}
+			logger.Warn("webrtc: glare on user %d offer — dropping, waiting for client rollback", userID)
+			return nil
 		}
 		if err := existingPeer.PC.SetRemoteDescription(offer); err != nil {
 			return err
@@ -215,10 +215,6 @@ func (s *SFU) HandleOffer(userID int64, username string, offerSDP string) error 
 			"payload": map[string]any{"sdp": answer.SDP},
 		})
 		s.SendMessage(userID, data)
-		// Server offer was rolled back — schedule a fresh renegotiation so
-		// any pending forward-tracks get re-advertised. renegotiate() is
-		// debounced, so a redundant call is cheap.
-		s.renegotiate(existingPeer)
 		return nil
 	}
 
