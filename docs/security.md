@@ -18,12 +18,12 @@ All state-changing POST requests require a CSRF token. The token is:
 - Embedded in HTML forms as a hidden `<input>` field
 - Validated server-side by comparing the cookie value with the form field value
 
-Protected endpoints: `/login`, `/register`, `/channels`, `/channels/delete`, `/channels/members/*`, `/channels/invite`, `/admin/users/*`.
+Protected endpoints: `/login`, `/register`, `/channels`, `/channels/delete`, `/channels/members/*`, `/channels/invite`, `/channels/guest-invite`, `/account/password`, `/admin/users/*`.
 
 ### WebSocket Security
 
 - **Origin validation:** The WebSocket upgrader checks the `Origin` header against the request `Host`. Cross-origin WebSocket connections are rejected (prevents CSWSH attacks)
-- **Authentication:** WebSocket connections require a valid session cookie
+- **Authentication:** WebSocket connections require either a valid user session cookie or a valid guest session token in guest mode
 - **Message size limit:** 512 KB maximum per message (prevents memory exhaustion)
 - **Duplicate connection handling:** When a user opens a second WebSocket, the previous connection is closed
 
@@ -52,6 +52,7 @@ All responses include:
 - **Private channels:** Only members, the creator, or server admins can join
 - **Private channel management:** Only the creator or admins can add/remove members and generate invite links
 - **Invite links:** 7-day expiry, token-based, auto-add member on accept
+- **Guest invite links:** Temporary `/guest/{token}` links create guest sessions limited to a single channel
 - **Chat messages:** Limited to 2000 characters, auto-cleaned by retention policy
 - **OAuth2/OIDC:** State verification via cookie, token exchange server-side, userinfo fetched server-side
 - **OAuth users:** Cannot set password directly, linked by email to existing accounts
@@ -79,15 +80,15 @@ All database queries use parameterized statements (`?` placeholders). No string 
 - No Subresource Integrity (SRI) hashes on CDN scripts
 - No account lockout after failed login attempts
 - WebSocket sessions are not re-validated after initial authentication
-- Cookie `Secure` flag is hardcoded to `false` (must be changed for HTTPS)
+- Cookie `Secure` flag is configurable and must be enabled for HTTPS deployments
 
 ### Recommendations for Production
 
 1. **Use HTTPS** -- Deploy behind Nginx with TLS (see [deployment.md](deployment.md))
-2. **Set `Secure` cookie flag** -- Change `Secure: false` to `true` in `cmd/server/main.go` when using HTTPS
+2. **Set `Secure` cookie flag** -- Set `auth.cookie_secure: true` or `VOCALA_COOKIE_SECURE=true` when using HTTPS
 3. **Enable TURN** -- Set `VOCALA_TURN_IP` for reliable NAT traversal
 4. **Restrict listen address** -- Use `VOCALA_ADDR=127.0.0.1:8090` when behind a reverse proxy
-5. **Firewall** -- Only expose ports 80, 443 (TCP) and 3478 (UDP) to the internet
+5. **Firewall** -- Expose only required ports: 80/443 TCP, 3478 UDP, 5349 TCP if using TURNS, and the configured WebRTC UDP media range
 
 ---
 
@@ -106,12 +107,12 @@ All database queries use parameterized statements (`?` placeholders). No string 
 
 Все POST-запросы, изменяющие состояние, требуют CSRF-токен. Токен хранится в отдельной куке `csrf_token` и дублируется в скрытом поле формы. Сервер сравнивает оба значения.
 
-Защищённые эндпоинты: `/login`, `/register`, `/channels`, `/channels/delete`, `/channels/members/*`, `/channels/invite`, `/admin/users/*`.
+Защищённые эндпоинты: `/login`, `/register`, `/channels`, `/channels/delete`, `/channels/members/*`, `/channels/invite`, `/channels/guest-invite`, `/account/password`, `/admin/users/*`.
 
 ### Безопасность WebSocket
 
 - **Проверка Origin:** WebSocket апгрейдер проверяет заголовок `Origin` против `Host`. Кросс-доменные подключения отклоняются
-- **Аутентификация:** Для WebSocket-подключения нужна валидная сессионная кука
+- **Аутентификация:** Для WebSocket-подключения нужна валидная пользовательская сессионная кука или валидный guest-токен в guest-режиме
 - **Лимит размера сообщений:** 512 КБ максимум (защита от исчерпания памяти)
 - **Дубликаты подключений:** При повторном подключении того же пользователя старое соединение закрывается
 
@@ -137,6 +138,7 @@ IP-based ограничение скорости на всех HTTP-эндпои
 - **Приватные каналы:** Только участники, создатель или администраторы
 - **Управление приватными каналами:** Только создатель или администраторы могут добавлять/удалять участников и генерировать invite-ссылки
 - **Invite-ссылки:** Срок действия 7 дней, токен-based, автоматическое добавление при переходе
+- **Guest invite-ссылки:** Временные ссылки `/guest/{token}` создают guest-сессии с доступом только к одному каналу
 - **Чат:** Сообщения ограничены 2000 символами, автоочистка по retention policy
 - **OAuth2/OIDC:** Верификация state через cookie, обмен токенами на сервере
 - **OAuth пользователи:** Не могут установить пароль напрямую, привязка по email
@@ -158,12 +160,12 @@ IP-based ограничение скорости на всех HTTP-эндпои
 - Нет SRI-хешей на CDN-скриптах
 - Нет блокировки аккаунта после неудачных попыток входа
 - WebSocket-сессии не перепроверяются после начальной аутентификации
-- Флаг `Secure` на куках отключён (нужно включить при HTTPS)
+- Флаг `Secure` у cookie настраивается и должен быть включён при HTTPS
 
 ### Рекомендации для продакшена
 
 1. **Используйте HTTPS** -- разверните за Nginx с TLS (см. [deployment.md](deployment.md))
-2. **Включите `Secure` флаг кук** -- измените `Secure: false` на `true` при использовании HTTPS
+2. **Включите `Secure` флаг кук** -- установите `auth.cookie_secure: true` или `VOCALA_COOKIE_SECURE=true` при использовании HTTPS
 3. **Включите TURN** -- установите `VOCALA_TURN_IP` для надёжного NAT traversal
 4. **Ограничьте адрес прослушивания** -- `VOCALA_ADDR=127.0.0.1:8090` за реверс-прокси
-5. **Файрвол** -- откройте только порты 80, 443 (TCP) и 3478 (UDP)
+5. **Файрвол** -- откройте только необходимые порты: 80/443 TCP, 3478 UDP, 5349 TCP при использовании TURNS и настроенный UDP-диапазон WebRTC media

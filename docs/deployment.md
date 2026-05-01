@@ -91,7 +91,7 @@ vocala -version
 
 **6. Register first user:**
 
-Open `https://voice.example.com` in your browser. The first registered user automatically becomes the admin.
+Open `https://voice.example.com` in your browser. The first registered user automatically becomes the admin. If public registration is not desired, set `registration_enabled: false` in `config.yaml` or `VOCALA_REGISTRATION=false` after bootstrapping the initial admin account.
 
 ### Network Diagram
 
@@ -257,7 +257,7 @@ sudo systemctl status vocala
 vocala -version
 ```
 
-**6. Регистрация:** откройте `https://voice.example.com` в браузере. Первый пользователь автоматически становится админом.
+**6. Регистрация:** откройте `https://voice.example.com` в браузере. Первый пользователь автоматически становится админом. Если публичная регистрация не нужна, после создания первого администратора установите `registration_enabled: false` в `config.yaml` или `VOCALA_REGISTRATION=false`.
 
 ### Обновление
 

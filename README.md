@@ -9,6 +9,7 @@ Self-hosted voice chat server with WebRTC SFU, text chat, webcam support, and ad
 - **Text chat** -- Persistent messages with emoji reactions in voice channels
 - **Screen sharing** -- Share your screen with live preview thumbnails
 - **Private channels** -- Invite-only channels with member management and invite links
+- **Guest access** -- Temporary guest invite links with channel-scoped guest sessions
 - **Built-in TURN/TURNS** -- Embedded [Pion TURN](https://github.com/pion/turn) with TLS support
 - **Voice Activity Detection** -- GainNode-based VAD with visual level meter
 - **Push-to-Talk** -- Optional PTT mode with spacebar
@@ -63,8 +64,11 @@ Vocala is configured via `config.yaml` and/or environment variables (env vars ov
 | `VOCALA_TURN_IP` | *(disabled)* | Public IP for built-in TURN server |
 | `VOCALA_NAT_IP` | *(disabled)* | Host IP for WebRTC ICE candidates (required in Docker) |
 | `VOCALA_COOKIE_SECURE` | `false` | Set `true` for HTTPS |
+| `VOCALA_REGISTRATION` | `true` | Set `false` or `0` to disable public registration |
 
 See [docs/configuration.md](docs/configuration.md) for full YAML reference.
+
+Guest links let channel owners or admins invite temporary users into a single channel without creating a full account.
 
 ## Documentation
 
