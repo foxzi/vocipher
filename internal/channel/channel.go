@@ -129,6 +129,10 @@ func Delete(id int64) error {
 	return err
 }
 
+// SetPrivacy toggles a channel's is_private flag. When making a channel
+// private, the creator is automatically added as a member so they retain
+// access. When making it public, the membership table is left intact —
+// existing memberships become inert until the channel is private again.
 func SetPrivacy(channelID int64, isPrivate bool) error {
 	ch, err := GetByID(channelID)
 	if err != nil {
@@ -454,6 +458,7 @@ func CreateGuestInvite(channelID, createdBy int64, hours int) (string, error) {
 	return token, nil
 }
 
+// ValidateGuestInvite checks if a guest invite is valid and returns channel ID and expiry.
 func ValidateGuestInvite(token string) (int64, int64, error) {
 	var channelID, expiresAt int64
 	err := database.DB.QueryRow(
