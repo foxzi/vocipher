@@ -129,6 +129,23 @@ func Delete(id int64) error {
 	return err
 }
 
+func SetPrivacy(channelID int64, isPrivate bool) error {
+	ch, err := GetByID(channelID)
+	if err != nil {
+		return err
+	}
+	if ch.IsPrivate == isPrivate {
+		return nil
+	}
+	if _, err := database.DB.Exec("UPDATE channels SET is_private = ? WHERE id = ?", isPrivate, channelID); err != nil {
+		return err
+	}
+	if isPrivate {
+		AddMember(channelID, ch.CreatedBy)
+	}
+	return nil
+}
+
 func Join(channelID int64, userID int64, username string) {
 	mu.Lock()
 	defer mu.Unlock()

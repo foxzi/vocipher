@@ -506,6 +506,7 @@ func main() {
 	mux.HandleFunc("/channels/members", requireAuth(csrfProtect(handleChannelMembers)))
 	mux.HandleFunc("/channels/members/add", requireAuth(csrfProtect(handleChannelMemberAdd)))
 	mux.HandleFunc("/channels/members/remove", requireAuth(csrfProtect(handleChannelMemberRemove)))
+	mux.HandleFunc("/channels/privacy", requireAuth(csrfProtect(handleChannelPrivacy)))
 	mux.HandleFunc("/channels/invite", requireAuth(csrfProtect(handleChannelInvite)))
 	mux.HandleFunc("/invite/", handleInviteAccept)
 	mux.HandleFunc("/api/users", requireAuth(handleAPIUsers))
@@ -1214,6 +1215,52 @@ func handleChannelInvite(w http.ResponseWriter, r *http.Request) {
 		"token": token,
 		"url":   fmt.Sprintf("/invite/%s", token),
 	})
+}
+
+func handleChannelPrivacy(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	id, err := strconv.ParseInt(r.FormValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	isPrivate := r.FormValue("is_private") == "true"
+
+	user := userFromContext(r)
+	ch, err := channel.GetByID(id)
+	if err != nil {
+		http.Error(w, "channel not found", http.StatusNotFound)
+		return
+	}
+	if ch.CreatedBy != user.ID && !user.IsAdmin {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	if err := channel.SetPrivacy(id, isPrivate); err != nil {
+		logger.Error("failed to set privacy on channel %d: %v", id, err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	channels, err := channel.ListForUser(user.ID, user.IsAdmin)
+	if err != nil {
+		logger.Error("failed to list channels: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	csrfToken := setCSRFCookie(w, r)
+	data := map[string]any{
+		"User":      user,
+		"Channels":  channels,
+		"CSRFToken": csrfToken,
+	}
+	templates["app.html"].ExecuteTemplate(w, "channel-list", data)
 }
 
 func handleInviteAccept(w http.ResponseWriter, r *http.Request) {

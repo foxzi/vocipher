@@ -840,6 +840,28 @@ async function deleteChannel(channelId, channelName) {
     }
 }
 
+async function toggleChannelPrivacy(channelId, channelName, currentlyPrivate) {
+    const next = !currentlyPrivate;
+    const verb = next ? 'private' : 'public';
+    if (!confirm('Make channel "' + channelName + '" ' + verb + '?')) return;
+
+    const form = new FormData();
+    form.append('id', channelId);
+    form.append('is_private', next ? 'true' : 'false');
+    form.append('csrf_token', getCSRFToken());
+
+    try {
+        const res = await fetch('/channels/privacy', { method: 'POST', body: form });
+        if (!res.ok) {
+            alert('Failed to change channel privacy');
+            return;
+        }
+        document.getElementById('channel-list').innerHTML = await res.text();
+    } catch (err) {
+        console.error('Failed to toggle channel privacy:', err);
+    }
+}
+
 // ─── Mute / PTT ───────────────────────────────────────────────
 
 function toggleMute() {
@@ -2021,6 +2043,7 @@ document.addEventListener('click', function(e) {
     const chName = btn.dataset.chName;
     if (action === 'manage-members') openMemberManager(chId, chName);
     if (action === 'delete-channel') deleteChannel(chId, chName);
+    if (action === 'toggle-privacy') toggleChannelPrivacy(chId, chName, btn.dataset.private === 'true');
     if (action === 'join-channel') joinChannel(chId, chName);
 });
 
