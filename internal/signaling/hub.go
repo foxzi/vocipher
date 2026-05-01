@@ -513,6 +513,28 @@ func handleMessage(c *Client, msg Message) {
 			logger.Info("signaling: user %d expectScreen=false", c.UserID)
 		}
 
+	case "media_track":
+		// Client tells us which kind ("camera"|"screen") a given outgoing
+		// MediaStream id maps to, before adding the track and renegotiating.
+		// This makes per-track classification on the SFU unambiguous when
+		// multiple video tracks are added in the same renegotiation.
+		var p struct {
+			StreamID string `json:"stream_id"`
+			Kind     string `json:"kind"`
+		}
+		if err := json.Unmarshal(msg.Payload, &p); err != nil {
+			return
+		}
+		chID := channel.GetUserChannel(c.UserID)
+		if chID == 0 {
+			return
+		}
+		sfu := rtc.GetSFU(chID)
+		if sfu != nil {
+			sfu.SetStreamKind(c.UserID, p.StreamID, p.Kind)
+			logger.Info("signaling: user %d media_track stream=%q kind=%q", c.UserID, p.StreamID, p.Kind)
+		}
+
 	case "ws_media_mode":
 		c.IsWSMedia = true
 		logger.Debug("signaling: user %d switched to WS media transport", c.UserID)

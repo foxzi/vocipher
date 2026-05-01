@@ -1,7 +1,7 @@
 name: vocala
 arch: amd64
 platform: linux
-version: v0.6.12
+version: v0.6.13
 maintainer: Vocala <noreply@vocala.dev>
 description: Self-hosted voice chat server with WebRTC SFU
 vendor: Vocala

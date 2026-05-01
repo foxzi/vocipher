@@ -1269,6 +1269,9 @@ async function startScreenShare() {
         // classification is flag-based on the server and the camera flag may
         // already be set from an earlier session restored from localStorage.
         sendWS({ type: 'screen_on' });
+        // Per-track msid->kind mapping: unambiguous even when camera and
+        // screen are added in the same renegotiation.
+        sendWS({ type: 'media_track', payload: { stream_id: screenStream.id, kind: 'screen' } });
         screenSender = peerConnection.addTrack(videoTrack, screenStream);
         screenAdaptiveCleanup = startAdaptiveBitrate(screenSender, SCREEN_BITRATE_TIERS_BPS, 'screen');
         isScreenSharing = true;
@@ -1535,6 +1538,7 @@ async function startCamera() {
         // Tell SFU next video track is camera, then add track
         // SFU will initiate renegotiation — do NOT create offer from client
         sendWS({ type: 'camera_on' });
+        sendWS({ type: 'media_track', payload: { stream_id: cameraStream.id, kind: 'camera' } });
         cameraSender = peerConnection.addTrack(videoTrack, cameraStream);
         cameraAdaptiveCleanup = startAdaptiveBitrate(cameraSender, CAMERA_BITRATE_TIERS_BPS, 'camera');
 

@@ -28,6 +28,11 @@ type Peer struct {
 	cameraTrack  *webrtc.TrackRemote
 	expectCamera bool // set via WS before renegotiation
 	expectScreen bool // set via WS before renegotiation
+	// streamKinds maps incoming MediaStream id (msid) -> kind ("camera"|"screen").
+	// Populated via WS "media_track" messages so OnTrack can classify each
+	// incoming video track unambiguously, even when camera and screen are
+	// added in the same renegotiation. Protected by mu.
+	streamKinds map[string]string
 	// Outgoing local tracks forwarded to this peer (from other peers)
 	outputTracks       map[int64]*webrtc.TrackLocalStaticRTP // audio
 	screenOutputTracks map[int64]*webrtc.TrackLocalStaticRTP // screen
@@ -244,6 +249,7 @@ func (s *SFU) HandleOffer(userID int64, username string, offerSDP string) error 
 		outputTracks:       make(map[int64]*webrtc.TrackLocalStaticRTP),
 		screenOutputTracks: make(map[int64]*webrtc.TrackLocalStaticRTP),
 		cameraOutputTracks: make(map[int64]*webrtc.TrackLocalStaticRTP),
+		streamKinds:        make(map[string]string),
 	}
 
 	// Video tracks: if expectCamera flag is set, treat as camera; otherwise screen
@@ -258,13 +264,22 @@ func (s *SFU) HandleOffer(userID int64, username string, offerSDP string) error 
 		case webrtc.RTPCodecTypeAudio:
 			s.handleAudioTrack(peer, userID, username, track)
 		case webrtc.RTPCodecTypeVideo:
-			// Classify incoming video track as camera or screen based on
-			// explicit hints the client sent over WS (camera_on / screen_on)
-			// immediately before the renegotiation. Prefer screen over camera
-			// when both flags are set — screen is the newer intent.
-			logger.Info("webrtc: classify video user %d: expectScreen=%v expectCamera=%v cameraTrack=%v screenTrack=%v",
-				userID, peer.expectScreen, peer.expectCamera, peer.cameraTrack != nil, peer.screenTrack != nil)
-			if peer.expectScreen && peer.screenTrack == nil {
+			// Classify incoming video track. Prefer the explicit msid->kind
+			// mapping the client registered via WS "media_track" — this is
+			// reliable when both camera and screen tracks are added in the
+			// same renegotiation. Fall back to expectScreen/expectCamera
+			// flags for older clients that don't send "media_track".
+			peer.mu.Lock()
+			hint := peer.streamKinds[track.StreamID()]
+			delete(peer.streamKinds, track.StreamID())
+			peer.mu.Unlock()
+			logger.Info("webrtc: classify video user %d streamID=%q hint=%q expectScreen=%v expectCamera=%v cameraTrack=%v screenTrack=%v",
+				userID, track.StreamID(), hint, peer.expectScreen, peer.expectCamera, peer.cameraTrack != nil, peer.screenTrack != nil)
+			if hint == "screen" && peer.screenTrack == nil {
+				s.handleScreenTrack(peer, userID, username, track)
+			} else if hint == "camera" && peer.cameraTrack == nil {
+				s.handleCameraTrack(peer, userID, username, track)
+			} else if peer.expectScreen && peer.screenTrack == nil {
 				peer.expectScreen = false
 				s.handleScreenTrack(peer, userID, username, track)
 			} else if peer.expectCamera && peer.cameraTrack == nil {
@@ -415,6 +430,28 @@ func (s *SFU) SetExpectScreen(userID int64, expect bool) {
 	if ok {
 		peer.expectScreen = expect
 	}
+}
+
+// SetStreamKind registers an explicit msid -> kind mapping so that the next
+// OnTrack with track.StreamID()==streamID is classified as the given kind
+// ("camera" or "screen"). This is the preferred path: it works correctly
+// even when multiple video tracks are added in a single renegotiation.
+func (s *SFU) SetStreamKind(userID int64, streamID, kind string) {
+	if streamID == "" || (kind != "camera" && kind != "screen") {
+		return
+	}
+	s.mu.RLock()
+	peer, ok := s.peers[userID]
+	s.mu.RUnlock()
+	if !ok {
+		return
+	}
+	peer.mu.Lock()
+	if peer.streamKinds == nil {
+		peer.streamKinds = make(map[string]string)
+	}
+	peer.streamKinds[streamID] = kind
+	peer.mu.Unlock()
 }
 
 func (s *SFU) HandleICECandidate(userID int64, candidateJSON json.RawMessage) error {
