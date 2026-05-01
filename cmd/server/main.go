@@ -1355,7 +1355,7 @@ func handleGuest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create guest session with invite expiry
+	// Create guest session with the same expiry as the invite.
 	sessionToken, err := channel.CreateGuestSession(guestName, chID, token, inviteExpiresAt)
 	if err != nil {
 		http.Error(w, "Failed to create guest session", http.StatusInternalServerError)
@@ -1363,6 +1363,10 @@ func handleGuest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	secure := cfg.Auth.CookieSecure
+	maxAge := int(inviteExpiresAt - time.Now().Unix())
+	if maxAge < 1 {
+		maxAge = 1
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "guest_session",
 		Value:    sessionToken,
@@ -1370,7 +1374,7 @@ func handleGuest(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   86400,
+		MaxAge:   maxAge,
 	})
 
 	http.Redirect(w, r, "/guest-app?t="+sessionToken, http.StatusSeeOther)
