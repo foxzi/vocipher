@@ -82,6 +82,38 @@ func List() ([]Channel, error) {
 	return channels, nil
 }
 
+// ListForUser returns channels visible to the given user.
+// Public channels are always included; private channels only if the user
+// is the creator, a member, or an admin.
+func ListForUser(userID int64, isAdmin bool) ([]Channel, error) {
+	query := "SELECT id, name, created_by, is_private FROM channels ORDER BY name"
+	args := []any{}
+	if !isAdmin {
+		query = `SELECT id, name, created_by, is_private FROM channels
+		         WHERE is_private = 0
+		            OR created_by = ?
+		            OR id IN (SELECT channel_id FROM channel_members WHERE user_id = ?)
+		         ORDER BY name`
+		args = []any{userID, userID}
+	}
+
+	rows, err := database.DB.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var channels []Channel
+	for rows.Next() {
+		var ch Channel
+		if err := rows.Scan(&ch.ID, &ch.Name, &ch.CreatedBy, &ch.IsPrivate); err != nil {
+			return nil, err
+		}
+		channels = append(channels, ch)
+	}
+	return channels, nil
+}
+
 func GetByID(id int64) (*Channel, error) {
 	var ch Channel
 	err := database.DB.QueryRow("SELECT id, name, created_by, is_private FROM channels WHERE id = ?", id).

@@ -775,7 +775,7 @@ func handleApp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := userFromContext(r)
-	channels, err := channel.List()
+	channels, err := channel.ListForUser(user.ID, user.IsAdmin)
 	if err != nil {
 		logger.Error("failed to list channels: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -813,7 +813,7 @@ func handleChannels(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	channels, err := channel.List()
+	channels, err := channel.ListForUser(user.ID, user.IsAdmin)
 	if err != nil {
 		logger.Error("failed to list channels: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
@@ -860,7 +860,7 @@ func handleDeleteChannel(w http.ResponseWriter, r *http.Request) {
 	}
 	signaling.ClearChannelPreview(id)
 
-	channels, err := channel.List()
+	channels, err := channel.ListForUser(user.ID, user.IsAdmin)
 	if err != nil {
 		logger.Error("failed to list channels: %v", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
