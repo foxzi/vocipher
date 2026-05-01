@@ -437,29 +437,31 @@ func CreateGuestInvite(channelID, createdBy int64, hours int) (string, error) {
 	return token, nil
 }
 
-// ValidateGuestInvite checks if a guest invite is valid and returns channel ID.
-func ValidateGuestInvite(token string) (int64, error) {
+func ValidateGuestInvite(token string) (int64, int64, error) {
 	var channelID, expiresAt int64
 	err := database.DB.QueryRow(
 		`SELECT channel_id, expires_at FROM guest_invites WHERE token = ?`, token,
 	).Scan(&channelID, &expiresAt)
 	if err != nil {
-		return 0, fmt.Errorf("invite not found")
+		return 0, 0, fmt.Errorf("invite not found")
 	}
 	if time.Now().Unix() > expiresAt {
-		return 0, fmt.Errorf("invite expired")
+		return 0, 0, fmt.Errorf("invite expired")
 	}
-	return channelID, nil
+	return channelID, expiresAt, nil
 }
 
 // CreateGuestSession creates a temporary session for a guest user.
-func CreateGuestSession(guestName string, channelID int64, inviteToken string, hours int) (string, error) {
-	sessionToken := generateToken()
+func CreateGuestSession(guestName string, channelID int64, inviteToken string, expiresAt int64) (string, error) {
 	now := time.Now().Unix()
-	expires := time.Now().Add(time.Duration(hours) * time.Hour).Unix()
+	if expiresAt <= now {
+		return "", fmt.Errorf("invite expired")
+	}
+
+	sessionToken := generateToken()
 	_, err := database.DB.Exec(
 		`INSERT INTO guest_sessions (token, guest_name, channel_id, invite_token, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		sessionToken, guestName, channelID, inviteToken, now, expires,
+		sessionToken, guestName, channelID, inviteToken, now, expiresAt,
 	)
 	if err != nil {
 		return "", err

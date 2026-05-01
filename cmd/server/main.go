@@ -1260,7 +1260,7 @@ func handleGuest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chID, err := channel.ValidateGuestInvite(token)
+	chID, inviteExpiresAt, err := channel.ValidateGuestInvite(token)
 	if err != nil {
 		http.Error(w, "Invalid or expired guest link", http.StatusBadRequest)
 		return
@@ -1308,8 +1308,8 @@ func handleGuest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create guest session (same duration as invite remaining time)
-	sessionToken, err := channel.CreateGuestSession(guestName, chID, token, 24)
+	// Create guest session with invite expiry
+	sessionToken, err := channel.CreateGuestSession(guestName, chID, token, inviteExpiresAt)
 	if err != nil {
 		http.Error(w, "Failed to create guest session", http.StatusInternalServerError)
 		return
