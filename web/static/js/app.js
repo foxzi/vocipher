@@ -2716,21 +2716,34 @@ function createGuestLink(channelId) {
                 </svg>
             </button>
         </div>
-        <div class="flex gap-2 mb-3">
-            <button onclick="generateGuestLink(${channelId}, 1)" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-vc-border hover:border-vc-accent hover:text-vc-accent transition text-vc-muted">1h</button>
-            <button onclick="generateGuestLink(${channelId}, 6)" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-vc-border hover:border-vc-accent hover:text-vc-accent transition text-vc-muted">6h</button>
-            <button onclick="generateGuestLink(${channelId}, 24)" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-vc-accent bg-vc-accent/10 text-vc-accent transition">24h</button>
-            <button onclick="generateGuestLink(${channelId}, 72)" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-vc-border hover:border-vc-accent hover:text-vc-accent transition text-vc-muted">3d</button>
-            <button onclick="generateGuestLink(${channelId}, 168)" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-vc-border hover:border-vc-accent hover:text-vc-accent transition text-vc-muted">7d</button>
+        <div class="flex gap-2 mb-3" id="guest-link-durations">
+            <button data-hours="1" onclick="generateGuestLink(${channelId}, 1, this)" class="guest-dur flex-1 py-1.5 text-xs font-medium rounded-lg border border-vc-border hover:border-vc-accent hover:text-vc-accent transition text-vc-muted">1h</button>
+            <button data-hours="6" onclick="generateGuestLink(${channelId}, 6, this)" class="guest-dur flex-1 py-1.5 text-xs font-medium rounded-lg border border-vc-border hover:border-vc-accent hover:text-vc-accent transition text-vc-muted">6h</button>
+            <button data-hours="24" onclick="generateGuestLink(${channelId}, 24, this)" class="guest-dur flex-1 py-1.5 text-xs font-medium rounded-lg border border-vc-border hover:border-vc-accent hover:text-vc-accent transition text-vc-muted">24h</button>
+            <button data-hours="72" onclick="generateGuestLink(${channelId}, 72, this)" class="guest-dur flex-1 py-1.5 text-xs font-medium rounded-lg border border-vc-border hover:border-vc-accent hover:text-vc-accent transition text-vc-muted">3d</button>
+            <button data-hours="168" onclick="generateGuestLink(${channelId}, 168, this)" class="guest-dur flex-1 py-1.5 text-xs font-medium rounded-lg border border-vc-border hover:border-vc-accent hover:text-vc-accent transition text-vc-muted">7d</button>
         </div>
         <div id="guest-link-result" class="text-center text-xs text-vc-muted">Select link duration</div>
     `;
     document.body.appendChild(popup);
 }
 
-async function generateGuestLink(channelId, hours) {
+async function generateGuestLink(channelId, hours, btn) {
     const resultEl = document.getElementById('guest-link-result');
     if (!resultEl) return;
+
+    // Update active state on duration buttons
+    const inactiveCls = ['border-vc-border', 'hover:border-vc-accent', 'hover:text-vc-accent', 'text-vc-muted'];
+    const activeCls = ['border-vc-accent', 'bg-vc-accent/10', 'text-vc-accent'];
+    document.querySelectorAll('#guest-link-durations .guest-dur').forEach(b => {
+        b.classList.remove(...activeCls);
+        b.classList.add(...inactiveCls);
+    });
+    if (btn) {
+        btn.classList.remove(...inactiveCls);
+        btn.classList.add(...activeCls);
+    }
+
     resultEl.innerHTML = '<span class="text-vc-muted">Generating...</span>';
 
     const form = new FormData();
