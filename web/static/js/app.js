@@ -4,6 +4,11 @@ let isMuted = localStorage.getItem('vocala-muted') === 'true';
 let reconnectAttempts = 0;
 
 // XSS-safe HTML escaping
+const SPEAKING_LABELS = ['bzzz', 'oooo', 'aaaa', 'yoho', 'wooo', 'hehe', 'mhm', 'pew', 'rawr', 'meow', 'woof', 'yay', 'huh', 'ohno', 'blah', 'nani', 'eeek', 'gulp', 'zzz', 'bam', 'pow', 'boop', 'nom', 'uwu', 'aha', 'hmm', 'eep', 'oof', 'yip', 'arr'];
+function randomSpeakingLabel() {
+    return SPEAKING_LABELS[Math.floor(Math.random() * SPEAKING_LABELS.length)];
+}
+
 function escapeHTML(str) {
     const div = document.createElement('div');
     div.textContent = str;
@@ -753,6 +758,17 @@ function updateMainContent(channelID, users) {
 
             const speakingIndicator = existing.querySelector('.speaking-indicator');
             if (speakingIndicator) speakingIndicator.style.display = u.Speaking ? '' : 'none';
+            const speakingLabel = existing.querySelector('.speaking-label');
+            if (speakingLabel) {
+                if (u.Speaking) {
+                    if (!speakingLabel.dataset.active) {
+                        speakingLabel.textContent = randomSpeakingLabel();
+                        speakingLabel.dataset.active = '1';
+                    }
+                } else {
+                    delete speakingLabel.dataset.active;
+                }
+            }
             const spacer = existing.querySelector('.speaking-spacer');
             if (spacer) spacer.style.display = u.Speaking ? 'none' : '';
         } else {
@@ -778,7 +794,7 @@ function updateMainContent(channelID, users) {
                 </div>` : ''}
                 <div class="speaking-indicator flex items-center gap-1.5" style="display:${u.Speaking ? '' : 'none'}">
                     <div class="flex gap-0.5"><div class="w-1.5 h-3 bg-vc-green rounded-full animate-pulse"></div><div class="w-1.5 h-5 bg-vc-green rounded-full animate-pulse" style="animation-delay:0.15s"></div><div class="w-1.5 h-3 bg-vc-green rounded-full animate-pulse" style="animation-delay:0.3s"></div></div>
-                    <span class="text-xs text-vc-green font-medium">Speaking</span>
+                    <span class="speaking-label text-xs text-vc-green font-medium" data-active="${u.Speaking ? '1' : ''}">${u.Speaking ? randomSpeakingLabel() : ''}</span>
                 </div>
                 <div class="speaking-spacer h-5" style="display:${u.Speaking ? 'none' : ''}"></div>
             `;
