@@ -39,8 +39,9 @@ type Peer struct {
 	cameraOutputTracks map[int64]*webrtc.TrackLocalStaticRTP // camera
 	mu                 sync.Mutex
 	negoMu             sync.Mutex
-	negoScheduled      bool         // debounce flag for renegotiation
-	iceRestartTimer    *time.Timer  // pending ICE restart on disconnect
+	negoScheduled      bool        // debounce flag for renegotiation
+	iceRestartTimer    *time.Timer // pending ICE restart on disconnect
+	iceFailoverTimer   *time.Timer // hard timeout to remove peer if ICE never recovers
 }
 
 // SFU manages all peer connections for a channel.
@@ -312,12 +313,22 @@ func (s *SFU) HandleOffer(userID int64, username string, offerSDP string) error 
 					s.iceRestart(peer)
 				})
 			}
+			if peer.iceFailoverTimer == nil {
+				peer.iceFailoverTimer = time.AfterFunc(30*time.Second, func() {
+					logger.Warn("webrtc: peer %d ICE failover timeout — removing", userID)
+					s.RemovePeer(userID)
+				})
+			}
 			peer.mu.Unlock()
 		case webrtc.ICEConnectionStateConnected, webrtc.ICEConnectionStateCompleted:
 			peer.mu.Lock()
 			if peer.iceRestartTimer != nil {
 				peer.iceRestartTimer.Stop()
 				peer.iceRestartTimer = nil
+			}
+			if peer.iceFailoverTimer != nil {
+				peer.iceFailoverTimer.Stop()
+				peer.iceFailoverTimer = nil
 			}
 			peer.mu.Unlock()
 		case webrtc.ICEConnectionStateFailed, webrtc.ICEConnectionStateClosed:
@@ -326,6 +337,10 @@ func (s *SFU) HandleOffer(userID int64, username string, offerSDP string) error 
 			if peer.iceRestartTimer != nil {
 				peer.iceRestartTimer.Stop()
 				peer.iceRestartTimer = nil
+			}
+			if peer.iceFailoverTimer != nil {
+				peer.iceFailoverTimer.Stop()
+				peer.iceFailoverTimer = nil
 			}
 			peer.mu.Unlock()
 		}
@@ -537,6 +552,10 @@ func (s *SFU) RemovePeer(userID int64) {
 	if peer.iceRestartTimer != nil {
 		peer.iceRestartTimer.Stop()
 		peer.iceRestartTimer = nil
+	}
+	if peer.iceFailoverTimer != nil {
+		peer.iceFailoverTimer.Stop()
+		peer.iceFailoverTimer = nil
 	}
 	peer.mu.Unlock()
 
