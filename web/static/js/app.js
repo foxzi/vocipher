@@ -168,15 +168,23 @@ function connectWS() {
         if (dbg) dbg.textContent = 'WS connected, joining channel ' + (window.VOCALA_GUEST_CHANNEL || 'none');
 
         if (currentChannelID) {
-            // Rejoin channel after reconnect
             const chID = currentChannelID;
-            const wasCameraOn = isCameraOn;
-            cleanupWebRTC();
-            currentChannelID = chID;
-            sendWS({ type: 'join_channel', payload: { channel_id: chID } });
-            startWebRTC().then(() => {
-                if (wasCameraOn) startCamera();
-            });
+            const pcAlive = peerConnection &&
+                peerConnection.connectionState !== 'failed' &&
+                peerConnection.connectionState !== 'closed' &&
+                peerConnection.connectionState !== 'disconnected';
+            if (pcAlive) {
+                // PC survived the WS blip — just re-announce presence on the server.
+                sendWS({ type: 'join_channel', payload: { channel_id: chID } });
+            } else {
+                const wasCameraOn = isCameraOn;
+                cleanupWebRTC();
+                currentChannelID = chID;
+                sendWS({ type: 'join_channel', payload: { channel_id: chID } });
+                startWebRTC().then(() => {
+                    if (wasCameraOn) startCamera();
+                });
+            }
         } else if (window.VOCALA_GUEST_CHANNEL) {
             // Guest auto-join their assigned channel
             try {
@@ -1020,10 +1028,12 @@ async function startWebRTC() {
             negoTimeout = setTimeout(async () => {
                 try {
                     if (!peerConnection) return;
-                    // Wait for stable state (server offer may be in progress)
-                    for (let i = 0; i < 20; i++) {
+                    // Bounded backoff wait for stable; server may be mid-offer.
+                    let delay = 200;
+                    for (let attempt = 0; attempt < 4; attempt++) {
                         if (peerConnection.signalingState === 'stable') break;
-                        await new Promise(r => setTimeout(r, 200));
+                        await new Promise(r => setTimeout(r, delay));
+                        delay *= 2;
                     }
                     if (!peerConnection || peerConnection.signalingState !== 'stable') return;
                     const offer = await peerConnection.createOffer();
