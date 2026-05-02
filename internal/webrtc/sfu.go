@@ -39,7 +39,8 @@ type Peer struct {
 	cameraOutputTracks map[int64]*webrtc.TrackLocalStaticRTP // camera
 	mu                 sync.Mutex
 	negoMu             sync.Mutex
-	negoScheduled      bool // debounce flag for renegotiation
+	negoScheduled      bool         // debounce flag for renegotiation
+	iceRestartTimer    *time.Timer  // pending ICE restart on disconnect
 }
 
 // SFU manages all peer connections for a channel.
@@ -302,8 +303,31 @@ func (s *SFU) HandleOffer(userID int64, username string, offerSDP string) error 
 
 	pc.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
 		logger.Debug("webrtc: peer %d ICE state: %s", userID, state.String())
-		if state == webrtc.ICEConnectionStateFailed || state == webrtc.ICEConnectionStateDisconnected {
+		switch state {
+		case webrtc.ICEConnectionStateDisconnected:
+			logger.Warn("webrtc: peer %d ICE disconnected — scheduling restart in 5s", userID)
+			peer.mu.Lock()
+			if peer.iceRestartTimer == nil {
+				peer.iceRestartTimer = time.AfterFunc(5*time.Second, func() {
+					s.iceRestart(peer)
+				})
+			}
+			peer.mu.Unlock()
+		case webrtc.ICEConnectionStateConnected, webrtc.ICEConnectionStateCompleted:
+			peer.mu.Lock()
+			if peer.iceRestartTimer != nil {
+				peer.iceRestartTimer.Stop()
+				peer.iceRestartTimer = nil
+			}
+			peer.mu.Unlock()
+		case webrtc.ICEConnectionStateFailed, webrtc.ICEConnectionStateClosed:
 			logger.Warn("webrtc: peer %d ICE %s — network problem (media may be stuck)", userID, state.String())
+			peer.mu.Lock()
+			if peer.iceRestartTimer != nil {
+				peer.iceRestartTimer.Stop()
+				peer.iceRestartTimer = nil
+			}
+			peer.mu.Unlock()
 		}
 	})
 
@@ -508,6 +532,13 @@ func (s *SFU) RemovePeer(userID int64) {
 	for _, op := range needsRenego {
 		s.renegotiate(op)
 	}
+
+	peer.mu.Lock()
+	if peer.iceRestartTimer != nil {
+		peer.iceRestartTimer.Stop()
+		peer.iceRestartTimer = nil
+	}
+	peer.mu.Unlock()
 
 	if peer.PC.ConnectionState() != webrtc.PeerConnectionStateClosed {
 		peer.PC.Close()
@@ -836,6 +867,39 @@ func (s *SFU) doRenegotiate(peer *Peer) {
 	}
 
 	logger.Debug("webrtc: sending renegotiation offer to user %d:\n%s", peer.UserID, offer.SDP)
+	data, _ := json.Marshal(map[string]any{
+		"type":    "webrtc_offer",
+		"payload": map[string]any{"sdp": offer.SDP},
+	})
+	s.SendMessage(peer.UserID, data)
+}
+
+// iceRestart sends a new offer with ICERestart:true to recover from a
+// prolonged ICE "disconnected" state without tearing down the PeerConnection.
+func (s *SFU) iceRestart(peer *Peer) {
+	if peer.PC.ConnectionState() == webrtc.PeerConnectionStateClosed {
+		return
+	}
+
+	peer.negoMu.Lock()
+	defer peer.negoMu.Unlock()
+
+	if peer.PC.SignalingState() != webrtc.SignalingStateStable {
+		logger.Debug("webrtc: ICE restart skipped for user %d — signaling not stable (%s)", peer.UserID, peer.PC.SignalingState())
+		return
+	}
+
+	offer, err := peer.PC.CreateOffer(&webrtc.OfferOptions{ICERestart: true})
+	if err != nil {
+		logger.Debug("webrtc: ICE restart offer failed for user %d: %v", peer.UserID, err)
+		return
+	}
+	if err := peer.PC.SetLocalDescription(offer); err != nil {
+		logger.Debug("webrtc: ICE restart setlocal failed for user %d: %v", peer.UserID, err)
+		return
+	}
+
+	logger.Info("webrtc: ICE restart triggered for user %d", peer.UserID)
 	data, _ := json.Marshal(map[string]any{
 		"type":    "webrtc_offer",
 		"payload": map[string]any{"sdp": offer.SDP},
