@@ -184,7 +184,7 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			Username:     user.Username,
 			IsAdmin:      user.IsAdmin,
 			Conn:         conn,
-			Send:         make(chan []byte, 256),
+			Send:         make(chan []byte, 1024),
 			SendPriority: make(chan []byte, 64),
 			SendMedia:    make(chan []byte, 64),
 		}
@@ -220,7 +220,7 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			IsGuest:        true,
 			GuestChannelID: gs.ChannelID,
 			Conn:           conn,
-			Send:           make(chan []byte, 256),
+			Send:           make(chan []byte, 1024),
 			SendPriority:   make(chan []byte, 64),
 			SendMedia:      make(chan []byte, 64),
 		}
