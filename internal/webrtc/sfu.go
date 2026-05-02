@@ -40,6 +40,7 @@ type Peer struct {
 	mu                 sync.Mutex
 	negoMu             sync.Mutex
 	negoScheduled      bool        // debounce flag for renegotiation
+	negoDirty          bool        // re-trigger requested while renegotiate goroutine running
 	iceRestartTimer    *time.Timer // pending ICE restart on disconnect
 	iceFailoverTimer   *time.Timer // hard timeout to remove peer if ICE never recovers
 }
@@ -92,10 +93,64 @@ func SetICETCPPort(port uint16) {
 	}
 }
 
+// registerCodecs registers media codecs with explicit Opus fmtp
+// (useinbandfec=1; usedtx=0) to harden audio against packet loss
+// and prevent DTX silence gaps. Video codecs match Pion defaults.
+func registerCodecs(m *webrtc.MediaEngine) error {
+	// Audio: Opus with explicit FEC on, DTX off.
+	if err := m.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:     webrtc.MimeTypeOpus,
+			ClockRate:    48000,
+			Channels:     2,
+			SDPFmtpLine:  "minptime=10;useinbandfec=1;usedtx=0",
+			RTCPFeedback: nil,
+		},
+		PayloadType: 111,
+	}, webrtc.RTPCodecTypeAudio); err != nil {
+		return err
+	}
+
+	videoRTCPFeedback := []webrtc.RTCPFeedback{
+		{Type: "goog-remb", Parameter: ""},
+		{Type: "ccm", Parameter: "fir"},
+		{Type: "nack", Parameter: ""},
+		{Type: "nack", Parameter: "pli"},
+	}
+
+	// VP8
+	if err := m.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:     webrtc.MimeTypeVP8,
+			ClockRate:    90000,
+			SDPFmtpLine:  "",
+			RTCPFeedback: videoRTCPFeedback,
+		},
+		PayloadType: 96,
+	}, webrtc.RTPCodecTypeVideo); err != nil {
+		return err
+	}
+
+	// H264 (constrained baseline, packetization-mode=1)
+	if err := m.RegisterCodec(webrtc.RTPCodecParameters{
+		RTPCodecCapability: webrtc.RTPCodecCapability{
+			MimeType:     webrtc.MimeTypeH264,
+			ClockRate:    90000,
+			SDPFmtpLine:  "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f",
+			RTCPFeedback: videoRTCPFeedback,
+		},
+		PayloadType: 102,
+	}, webrtc.RTPCodecTypeVideo); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func getAPI() *webrtc.API {
 	apiOnce.Do(func() {
 		m := &webrtc.MediaEngine{}
-		if err := m.RegisterDefaultCodecs(); err != nil {
+		if err := registerCodecs(m); err != nil {
 			logger.Fatal("webrtc: failed to register codecs:", err)
 		}
 
@@ -104,7 +159,9 @@ func getAPI() *webrtc.API {
 			logger.Fatal("webrtc: failed to register interceptors:", err)
 		}
 
-		pliFactory, err := intervalpli.NewReceiverInterceptor()
+		pliFactory, err := intervalpli.NewReceiverInterceptor(
+			intervalpli.GeneratorInterval(2 * time.Second),
+		)
 		if err != nil {
 			logger.Fatal("webrtc: failed to create PLI interceptor:", err)
 		}
@@ -345,8 +402,21 @@ func (s *SFU) HandleOffer(userID int64, username string, offerSDP string) error 
 				peer.iceFailoverTimer = nil
 			}
 			peer.mu.Unlock()
-		case webrtc.ICEConnectionStateFailed, webrtc.ICEConnectionStateClosed:
-			logger.Warn("webrtc: peer %d ICE %s — network problem (media may be stuck)", userID, state.String())
+		case webrtc.ICEConnectionStateFailed:
+			logger.Warn("webrtc: peer %d ICE failed — triggering immediate restart", userID)
+			peer.mu.Lock()
+			if peer.iceRestartTimer != nil {
+				peer.iceRestartTimer.Stop()
+				peer.iceRestartTimer = nil
+			}
+			if peer.iceFailoverTimer != nil {
+				peer.iceFailoverTimer.Stop()
+				peer.iceFailoverTimer = nil
+			}
+			peer.mu.Unlock()
+			go s.iceRestart(peer)
+		case webrtc.ICEConnectionStateClosed:
+			logger.Warn("webrtc: peer %d ICE closed", userID)
 			peer.mu.Lock()
 			if peer.iceRestartTimer != nil {
 				peer.iceRestartTimer.Stop()
@@ -844,24 +914,38 @@ func (s *SFU) renegotiateAllExcept(userID int64) {
 }
 
 // renegotiate schedules a debounced renegotiation for a peer.
-// Multiple calls within 300ms are coalesced into one offer.
+// Multiple calls are coalesced: if a goroutine is already running, negoDirty
+// is set so the goroutine loops and retries after the current attempt finishes.
 func (s *SFU) renegotiate(peer *Peer) {
 	peer.mu.Lock()
 	if peer.negoScheduled {
+		peer.negoDirty = true // request will be picked up by running goroutine
 		peer.mu.Unlock()
 		return
 	}
 	peer.negoScheduled = true
+	peer.negoDirty = false
 	peer.mu.Unlock()
 
 	go func() {
-		time.Sleep(500 * time.Millisecond)
+		for {
+			time.Sleep(500 * time.Millisecond)
 
-		peer.mu.Lock()
-		peer.negoScheduled = false
-		peer.mu.Unlock()
+			peer.mu.Lock()
+			peer.negoDirty = false
+			peer.mu.Unlock()
 
-		s.doRenegotiate(peer)
+			s.doRenegotiate(peer)
+
+			peer.mu.Lock()
+			if !peer.negoDirty {
+				peer.negoScheduled = false
+				peer.mu.Unlock()
+				return
+			}
+			// dirty: another request came in (or doRenegotiate timed out and re-marked dirty); loop again
+			peer.mu.Unlock()
+		}
 	}()
 }
 
@@ -885,7 +969,10 @@ func (s *SFU) doRenegotiate(peer *Peer) {
 		peer.negoMu.Lock()
 	}
 	if peer.PC.SignalingState() != webrtc.SignalingStateStable {
-		logger.Debug("webrtc: renegotiation timeout for user %d, signaling state: %s", peer.UserID, peer.PC.SignalingState())
+		logger.Debug("webrtc: renegotiation timeout for user %d, signaling state: %s — will retry", peer.UserID, peer.PC.SignalingState())
+		peer.mu.Lock()
+		peer.negoDirty = true
+		peer.mu.Unlock()
 		return
 	}
 
