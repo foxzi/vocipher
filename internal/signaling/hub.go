@@ -27,6 +27,16 @@ func SetMaxMessageSize(size int64) {
 	maxMessageSize = size
 }
 
+const (
+	// pongWait — how long we wait for a pong from the client before
+	// considering the connection dead. Must be > pingPeriod.
+	pongWait = 60 * time.Second
+	// pingPeriod — how often we send pings. Must be < pongWait.
+	pingPeriod = 30 * time.Second
+	// writeWait — deadline for a single WriteMessage call.
+	writeWait = 10 * time.Second
+)
+
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		origin := r.Header.Get("Origin")
@@ -209,21 +219,33 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Client) writePump() {
-	defer c.Conn.Close()
+	pingTicker := time.NewTicker(pingPeriod)
+	defer func() {
+		pingTicker.Stop()
+		c.Conn.Close()
+	}()
 	for {
 		select {
 		case msg, ok := <-c.Send:
+			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
+				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 			if err := c.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
 				return
 			}
 		case media, ok := <-c.SendMedia:
+			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
 				return
 			}
 			if err := c.Conn.WriteMessage(websocket.BinaryMessage, media); err != nil {
+				return
+			}
+		case <-pingTicker.C:
+			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
 		}
@@ -244,6 +266,11 @@ func (c *Client) readPump() {
 	}()
 
 	c.Conn.SetReadLimit(maxMessageSize)
+	c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+	c.Conn.SetPongHandler(func(string) error {
+		c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
 	wsLimiter := rate.NewLimiter(30, 60) // 30 msg/s, burst 60
 
 	for {
