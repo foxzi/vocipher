@@ -125,7 +125,7 @@ let gainNode = null;
 let processedStream = null; // audio stream routed through GainNode for VAD control
 let vadInterval = null;
 let isSpeaking = false;
-let vadThreshold = parseInt(localStorage.getItem('vocala-vad-threshold')) || 25;
+let vadThreshold = parseInt(localStorage.getItem('vocala-vad-threshold')) || 15;
 let currentVadLevel = 0;
 
 // Screen share state
