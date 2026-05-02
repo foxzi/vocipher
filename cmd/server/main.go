@@ -465,6 +465,13 @@ func main() {
 		logger.Info("TURN enabled: uris=%v", uris)
 	}
 
+	// Reachability sanity check: warn loudly if the server has no NAT 1:1 IP
+	// and no TURN. In that configuration peers behind symmetric NAT (typical
+	// mobile carriers, corporate networks) will silently fail to connect.
+	if cfg.WebRTC.NATIP == "" && !cfg.TURN.Enabled {
+		logger.Warn("webrtc: no nat_ip and no TURN configured — clients behind symmetric NAT (mobile carriers, restrictive corporate networks) will fail to connect; set webrtc.nat_ip to the public IP of this server, or enable turn.enabled with turn.ip")
+	}
+
 	// Periodic session cleanup
 	go func() {
 		for {
