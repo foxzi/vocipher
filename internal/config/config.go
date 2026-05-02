@@ -35,6 +35,7 @@ type WebRTCConfig struct {
 	NATIP        string `yaml:"nat_ip"`
 	UDPPortMin   uint16 `yaml:"udp_port_min"`
 	UDPPortMax   uint16 `yaml:"udp_port_max"`
+	ICETCPPort   uint16 `yaml:"ice_tcp_port"`   // TCP mux port for ICE TCP candidates; 0 disables
 	MaxMessageKB int    `yaml:"max_message_kb"` // WebSocket message size limit
 }
 
@@ -94,6 +95,7 @@ func Default() *Config {
 		WebRTC: WebRTCConfig{
 			UDPPortMin:   40000,
 			UDPPortMax:   40200,
+			ICETCPPort:   40201,
 			MaxMessageKB: 512,
 		},
 		TURN: TURNConfig{

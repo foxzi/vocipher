@@ -66,6 +66,7 @@ var (
 var (
 	udpPortMin uint16
 	udpPortMax uint16
+	iceTCPPort uint16 = 40201
 )
 
 func SetNATIP(ip string) {
@@ -78,6 +79,17 @@ func SetUDPPortRange(min, max uint16) {
 	udpPortMin = min
 	udpPortMax = max
 	logger.Info("webrtc: UDP port range set to %d-%d", min, max)
+}
+
+// SetICETCPPort sets the TCP port used for ICE TCP candidates.
+// Pass 0 to disable ICE TCP entirely.
+func SetICETCPPort(port uint16) {
+	iceTCPPort = port
+	if port == 0 {
+		logger.Info("webrtc: ICE TCP mux disabled")
+	} else {
+		logger.Info("webrtc: ICE TCP mux port set to %d", port)
+	}
 }
 
 func getAPI() *webrtc.API {
@@ -108,13 +120,15 @@ func getAPI() *webrtc.API {
 		// ICE keepalive every 2s to maintain NAT bindings on mobile networks
 		s.SetICETimeouts(15*time.Second, 60*time.Second, 2*time.Second)
 		// Enable ICE TCP candidates for mobile clients behind aggressive NAT
-		tcpListener, tcpErr := net.ListenTCP("tcp", &net.TCPAddr{Port: 40201})
-		if tcpErr == nil {
-			tcpMux := webrtc.NewICETCPMux(nil, tcpListener, 8)
-			s.SetICETCPMux(tcpMux)
-			logger.Debug("webrtc: ICE TCP mux listening on port 40201")
-		} else {
-			logger.Error("webrtc: failed to start ICE TCP mux: %v", tcpErr)
+		if iceTCPPort > 0 {
+			tcpListener, tcpErr := net.ListenTCP("tcp", &net.TCPAddr{Port: int(iceTCPPort)})
+			if tcpErr == nil {
+				tcpMux := webrtc.NewICETCPMux(nil, tcpListener, 8)
+				s.SetICETCPMux(tcpMux)
+				logger.Info("webrtc: ICE TCP mux listening on port %d", iceTCPPort)
+			} else {
+				logger.Error("webrtc: failed to bind ICE TCP mux on port %d: %v — TCP fallback DISABLED for clients on UDP-restricted networks. Change webrtc.ice_tcp_port or set it to 0 to silence this warning.", iceTCPPort, tcpErr)
+			}
 		}
 		if natIP != "" {
 			s.SetNAT1To1IPs([]string{natIP}, webrtc.ICECandidateTypeHost)

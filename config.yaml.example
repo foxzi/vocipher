@@ -16,6 +16,7 @@ webrtc:
   nat_ip: ""                # Host IP for ICE candidates (required in Docker)
   udp_port_min: 40000       # Ephemeral UDP port range start
   udp_port_max: 40200       # Ephemeral UDP port range end
+  ice_tcp_port: 40201       # TCP mux port for ICE TCP fallback (0 = disabled)
   max_message_kb: 512       # Max WebSocket message size in KB
 
 turn:

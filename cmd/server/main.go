@@ -436,6 +436,7 @@ func main() {
 	if cfg.WebRTC.UDPPortMin > 0 && cfg.WebRTC.UDPPortMax > 0 {
 		rtc.SetUDPPortRange(cfg.WebRTC.UDPPortMin, cfg.WebRTC.UDPPortMax)
 	}
+	rtc.SetICETCPPort(cfg.WebRTC.ICETCPPort)
 
 	// Set WebSocket message size limit
 	if cfg.WebRTC.MaxMessageKB > 0 {
