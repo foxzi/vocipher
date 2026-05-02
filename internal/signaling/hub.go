@@ -60,6 +60,7 @@ type Client struct {
 	IsAdmin        bool
 	Conn           *websocket.Conn
 	Send           chan []byte // text JSON messages
+	SendPriority   chan []byte // critical signaling messages (offer/answer/ICE) — must not be dropped
 	SendMedia      chan []byte // binary media frames
 	IsWSMedia      bool        // true if this client uses WS media transport (mobile)
 	IsGuest        bool
@@ -147,6 +148,25 @@ func (h *Hub) SendTo(userID int64, msg []byte) {
 	}
 }
 
+// SendToPriority delivers a critical signaling message to a user.
+// If the priority buffer is full, the client is considered stuck
+// and its connection is closed so it can reconnect cleanly,
+// rather than silently losing the message.
+func (h *Hub) SendToPriority(userID int64, msg []byte) {
+	h.mu.RLock()
+	client, ok := h.clients[userID]
+	h.mu.RUnlock()
+	if !ok {
+		return
+	}
+	select {
+	case client.SendPriority <- msg:
+	default:
+		logger.Warn("signaling: priority buffer full for user %d, closing connection", userID)
+		client.Conn.Close()
+	}
+}
+
 func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	var client *Client
 
@@ -160,12 +180,13 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		client = &Client{
-			UserID:    user.ID,
-			Username:  user.Username,
-			IsAdmin:   user.IsAdmin,
-			Conn:      conn,
-			Send:      make(chan []byte, 256),
-			SendMedia: make(chan []byte, 64),
+			UserID:       user.ID,
+			Username:     user.Username,
+			IsAdmin:      user.IsAdmin,
+			Conn:         conn,
+			Send:         make(chan []byte, 256),
+			SendPriority: make(chan []byte, 64),
+			SendMedia:    make(chan []byte, 64),
 		}
 	} else {
 		// Try guest session (cookie or query param for mobile compatibility)
@@ -200,6 +221,7 @@ func HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			GuestChannelID: gs.ChannelID,
 			Conn:           conn,
 			Send:           make(chan []byte, 256),
+			SendPriority:   make(chan []byte, 64),
 			SendMedia:      make(chan []byte, 64),
 		}
 	}
@@ -230,6 +252,14 @@ func (c *Client) writePump() {
 			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
 				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+			if err := c.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				return
+			}
+		case msg, ok := <-c.SendPriority:
+			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if !ok {
 				return
 			}
 			if err := c.Conn.WriteMessage(websocket.TextMessage, msg); err != nil {
@@ -461,7 +491,7 @@ func handleMessage(c *Client, msg Message) {
 			return
 		}
 		sfu := rtc.GetOrCreateSFU(chID, func(userID int64, data []byte) {
-			GlobalHub.SendTo(userID, data)
+			GlobalHub.SendToPriority(userID, data)
 		})
 		if err := sfu.HandleOffer(c.UserID, c.Username, p.SDP); err != nil {
 			logger.Error("signaling: webrtc offer failed for user %d: %v", c.UserID, err)
@@ -483,7 +513,7 @@ func handleMessage(c *Client, msg Message) {
 			return
 		}
 		sfu := rtc.GetOrCreateSFU(chID, func(userID int64, data []byte) {
-			GlobalHub.SendTo(userID, data)
+			GlobalHub.SendToPriority(userID, data)
 		})
 		if err := sfu.HandleAnswer(c.UserID, p.SDP); err != nil {
 			logger.Error("signaling: webrtc answer failed for user %d: %v", c.UserID, err)
@@ -724,7 +754,7 @@ func handleMessage(c *Client, msg Message) {
 			return
 		}
 		sfu := rtc.GetOrCreateSFU(chID, func(userID int64, data []byte) {
-			GlobalHub.SendTo(userID, data)
+			GlobalHub.SendToPriority(userID, data)
 		})
 		if err := sfu.HandleICECandidate(c.UserID, p.Candidate); err != nil {
 			logger.Warn("signaling: ice candidate failed for user %d: %v", c.UserID, err)
