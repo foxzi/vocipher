@@ -71,6 +71,11 @@ var (
 	channelPreviews = map[int64][]byte{}
 )
 
+var (
+	chatReactionsMu sync.Mutex
+	chatReactions   = make(map[string]map[string]struct{}) // messageID -> set("userID|emoji")
+)
+
 func (h *Hub) Register(client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -599,6 +604,19 @@ func handleMessage(c *Client, msg Message) {
 		if chID == 0 {
 			return
 		}
+		key := fmt.Sprintf("%d|%s", c.UserID, p.Emoji)
+		chatReactionsMu.Lock()
+		set, ok := chatReactions[p.MessageID]
+		if !ok {
+			set = make(map[string]struct{})
+			chatReactions[p.MessageID] = set
+		}
+		if _, exists := set[key]; exists {
+			chatReactionsMu.Unlock()
+			return
+		}
+		set[key] = struct{}{}
+		chatReactionsMu.Unlock()
 		reactionMsg, _ := json.Marshal(map[string]any{
 			"type":       "chat_reaction",
 			"message_id": p.MessageID,
@@ -618,6 +636,9 @@ func handleMessage(c *Client, msg Message) {
 			return
 		}
 		database.ClearChannelMessages(chID)
+		chatReactionsMu.Lock()
+		chatReactions = make(map[string]map[string]struct{})
+		chatReactionsMu.Unlock()
 		clearMsg, _ := json.Marshal(map[string]any{
 			"type":       "chat_cleared",
 			"channel_id": chID,

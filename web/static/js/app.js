@@ -2238,18 +2238,22 @@ function addChatReaction(msg) {
     const container = document.getElementById('reactions-' + msg.message_id);
     if (!container) return;
 
-    // Check if this emoji already exists, increment counter
+    const userId = String(msg.user_id);
     const existing = container.querySelector(`[data-emoji="${msg.emoji}"]`);
     if (existing) {
-        const count = parseInt(existing.dataset.count || '1') + 1;
-        existing.dataset.count = count;
-        existing.textContent = msg.emoji + (count > 1 ? ' ' + count : '');
+        const users = (existing.dataset.users || '').split(',').filter(Boolean);
+        if (users.includes(userId)) return;
+        users.push(userId);
+        existing.dataset.users = users.join(',');
+        existing.dataset.count = String(users.length);
+        existing.textContent = msg.emoji + (users.length > 1 ? ' ' + users.length : '');
         return;
     }
 
     const badge = document.createElement('span');
     badge.className = 'inline-flex items-center px-1 py-0.5 rounded bg-vc-channel text-xs cursor-default';
     badge.dataset.emoji = msg.emoji;
+    badge.dataset.users = userId;
     badge.dataset.count = '1';
     badge.textContent = msg.emoji;
     badge.title = msg.username;
