@@ -541,11 +541,11 @@ func main() {
 	handler := securityHeaders(rateLimitMiddleware(mux))
 
 	server := &http.Server{
-		Addr:         cfg.Server.Addr,
-		Handler:      handler,
-		ReadTimeout:  time.Duration(cfg.Server.ReadTimeout) * time.Second,
-		WriteTimeout: time.Duration(cfg.Server.WriteTimeout) * time.Second,
-		IdleTimeout:  time.Duration(cfg.Server.IdleTimeout) * time.Second,
+		Addr:              cfg.Server.Addr,
+		Handler:           handler,
+		ReadHeaderTimeout: time.Duration(cfg.Server.ReadTimeout) * time.Second,
+		WriteTimeout:      0, // disabled: WS upgrade and long uploads need no global deadline; per-handler/WS-level deadlines apply
+		IdleTimeout:       time.Duration(cfg.Server.IdleTimeout) * time.Second,
 	}
 
 	// Graceful shutdown
