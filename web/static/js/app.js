@@ -59,6 +59,12 @@ function toggleSounds() {
     return notifSoundsEnabled;
 }
 
+function toggleRnnoise() {
+    rnnoiseEnabled = !rnnoiseEnabled;
+    localStorage.setItem('vocala-rnnoise', rnnoiseEnabled ? '1' : '0');
+    return rnnoiseEnabled;
+}
+
 // --- Browser notifications ---
 
 function requestNotificationPermission() {
@@ -926,12 +932,35 @@ function togglePTT() {
 
 // ─── WebRTC ───────────────────────────────────────────────────
 
+// Loads the RNNoise AudioWorklet (idempotent) and returns a connected node,
+// or null if RNNoise is disabled / failed to load.
+let rnnoiseModulePromise = null;
+async function loadRnnoiseNode(ctx) {
+    if (!rnnoiseEnabled) return null;
+    try {
+        if (!rnnoiseModulePromise) {
+            rnnoiseModulePromise = ctx.audioWorklet.addModule('/static/js/rnnoise-worklet.js');
+        }
+        await rnnoiseModulePromise;
+        return new AudioWorkletNode(ctx, 'NoiseSuppressorWorklet', {
+            numberOfInputs: 1,
+            numberOfOutputs: 1,
+            channelCount: 1,
+            channelCountMode: 'explicit',
+        });
+    } catch (e) {
+        console.error('RNNoise worklet failed to load, falling back to browser NS:', e);
+        rnnoiseModulePromise = null;
+        return null;
+    }
+}
+
 async function startWebRTC() {
     try {
         // Get microphone access
         const audioConstraints = {
             echoCancellation: true,
-            noiseSuppression: true,
+            noiseSuppression: !rnnoiseEnabled,
             autoGainControl: true,
         };
         if (selectedMicId) audioConstraints.deviceId = { exact: selectedMicId };
@@ -942,11 +971,17 @@ async function startWebRTC() {
 
         // Route audio through Web Audio API GainNode for VAD-based muting
         audioContext = new AudioContext();
+        const rnnoiseNode = await loadRnnoiseNode(audioContext);
         const source = audioContext.createMediaStreamSource(localStream);
         gainNode = audioContext.createGain();
         gainNode.gain.value = (pushToTalk || isMuted) ? 0.0 : 1.0;
         const dest = audioContext.createMediaStreamDestination();
-        source.connect(gainNode);
+        if (rnnoiseNode) {
+            source.connect(rnnoiseNode);
+            rnnoiseNode.connect(gainNode);
+        } else {
+            source.connect(gainNode);
+        }
         gainNode.connect(dest);
         processedStream = dest.stream;
 
@@ -2280,17 +2315,23 @@ let wsMediaVideoElements = {}; // userID -> container element
 async function startWSMedia() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+            audio: { echoCancellation: true, noiseSuppression: !rnnoiseEnabled, autoGainControl: true },
             video: false,
         });
 
         // Setup VAD (reads raw stream for level detection)
         audioContext = new AudioContext();
+        const rnnoiseNode = await loadRnnoiseNode(audioContext);
         const source = audioContext.createMediaStreamSource(localStream);
         gainNode = audioContext.createGain();
         gainNode.gain.value = (pushToTalk || isMuted) ? 0.0 : 1.0;
         const dest = audioContext.createMediaStreamDestination();
-        source.connect(gainNode);
+        if (rnnoiseNode) {
+            source.connect(rnnoiseNode);
+            rnnoiseNode.connect(gainNode);
+        } else {
+            source.connect(gainNode);
+        }
         gainNode.connect(dest);
         processedStream = dest.stream;
         setupVAD(localStream);
@@ -2835,6 +2876,7 @@ async function generateGuestLink(channelId, hours, btn) {
 
 // --- Settings modal (devices, sounds) ---
 
+let rnnoiseEnabled = localStorage.getItem('vocala-rnnoise') === '1';
 let selectedMicId = localStorage.getItem('vocala-mic') || '';
 let selectedCamId = localStorage.getItem('vocala-cam') || '';
 let selectedSpkId = localStorage.getItem('vocala-spk') || '';
@@ -2882,6 +2924,15 @@ async function openSettings() {
                             class="rounded border-vc-border text-vc-accent focus:ring-vc-accent"
                             onchange="toggleSounds()">
                     </label>
+                </div>
+                <div class="border-t border-vc-border pt-3">
+                    <label class="flex items-center justify-between cursor-pointer">
+                        <span class="text-sm text-vc-text">RNNoise (enhanced noise suppression)</span>
+                        <input type="checkbox" id="settings-rnnoise" ${rnnoiseEnabled ? 'checked' : ''}
+                            class="rounded border-vc-border text-vc-accent focus:ring-vc-accent"
+                            onchange="toggleRnnoise()">
+                    </label>
+                    <p class="text-xs text-vc-muted mt-1">Rejoin the channel to apply.</p>
                 </div>
                 <div class="border-t border-vc-border pt-3">
                     <div class="text-xs font-medium text-vc-muted mb-2">Change Password</div>
