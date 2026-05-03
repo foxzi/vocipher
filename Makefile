@@ -1,4 +1,4 @@
-VERSION ?= 0.6.16
+VERSION ?= 0.6.17
 LDFLAGS = -ldflags "-X main.version=$(VERSION)"
 
 .PHONY: run build clean package deb rpm
